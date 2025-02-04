@@ -12,14 +12,19 @@ async function handler(req, res) {
 
     try {
         const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s';
+        console.log('Spelling request - User IP:', userIp);
         
-        // Ensure form=partial is included
-        const params = {
-            ...req.query,
-            form: 'partial'
-        };
+        // Create base URL
+        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/';
         
+        // Get all query parameters
+        const params = new URLSearchParams(req.query);
+        
+        // Ensure form=partial is set correctly
+        params.set('form', 'partial');
+
+        console.log('Final URL will be:', `${funnelbackUrl}?${params.toString()}`);
+
         const response = await axios.get(funnelbackUrl, {
             params: params,
             headers: {
@@ -30,6 +35,7 @@ async function handler(req, res) {
 
         res.send(response.data);
     } catch (error) {
+        console.error('Spelling error details:', error);
         res.status(500).send('Spelling error: ' + (error.response?.data || error.message));
     }
 }
