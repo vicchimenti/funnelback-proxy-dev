@@ -14,14 +14,16 @@ async function handler(req, res) {
         const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
         console.log('Spelling request - User IP:', userIp);
         
-        // Create base URL
-        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/';
+        // Fix the base URL - include search.html in the path
+        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
         
         // Get all query parameters
-        const params = new URLSearchParams(req.query);
-        
-        // Ensure form=partial is set correctly
-        params.set('form', 'partial');
+        const params = new URLSearchParams({
+            ...req.query,
+            collection: 'seattleu~sp-search',
+            profile: '_default',
+            form: 'partial'
+        });
 
         console.log('Final URL will be:', `${funnelbackUrl}?${params.toString()}`);
 
