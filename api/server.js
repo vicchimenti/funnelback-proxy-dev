@@ -6,7 +6,6 @@ async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Handle preflight requests
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
@@ -22,23 +21,18 @@ async function handler(req, res) {
             ...req.query
         };
 
-        console.log('Making request to Funnelback with params:', params);
-
         const response = await axios.get(funnelbackUrl, {
             params: params,
             headers: {
-                'Accept': 'application/json'
+                'Accept': 'text/html'
             }
         });
 
-        res.status(200).json(response.data);
+        // Send as text instead of JSON
+        res.send(response.data);
     } catch (error) {
-        console.error('Error details:', error.response ? error.response.data : error.message);
-        res.status(500).json({ 
-            error: error.message,
-            details: error.response ? error.response.data : null,
-            query: req.query
-        });
+        console.error('Error details:', error.response?.data || error.message);
+        res.status(500).send('Search error: ' + (error.response?.data || error.message));
     }
 }
 
