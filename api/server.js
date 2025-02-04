@@ -7,11 +7,12 @@ async function handler(req, res) {
         
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
         
-        // Add minimum required parameters for Funnelback
+        // Combine default parameters with any additional query parameters
         const params = {
-            collection: 'seattleu-meta',
-            form: 'simple',
-            query: req.query.query || '*'  // If no query provided, search everything
+            collection: 'seattleu~sp-search',
+            profile: '_default',
+            form: 'partial',
+            ...req.query  // This allows overriding defaults if needed
         };
 
         console.log('Making request to Funnelback with params:', params);
@@ -28,7 +29,8 @@ async function handler(req, res) {
         console.error('Error details:', error.response ? error.response.data : error.message);
         res.status(500).json({ 
             error: error.message,
-            details: error.response ? error.response.data : null
+            details: error.response ? error.response.data : null,
+            query: req.query
         });
     }
 }
