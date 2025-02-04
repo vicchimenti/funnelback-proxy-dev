@@ -1,10 +1,9 @@
 {
-    "version": 2,
-    "builds": [
-      { "src": "server.js", "use": "@vercel/node" }
-    ],
-    "routes": [
-      { "src": "/proxy/funnelback", "dest": "/server.js" }
-    ]
-  }
-  
+  "version": 2,
+  "builds": [
+    { "src": "server.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/proxy/funnelback", "dest": "/server.js" }
+  ]
+}
