@@ -4,8 +4,10 @@ const cors = require('cors');
 
 const app = express();
 
+// Enable CORS for your frontend domain
 app.use(cors({ origin: 'https://www.seattleu.edu' }));
 
+// Define API route
 app.get('/proxy/funnelback', async (req, res) => {
     try {
         const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -22,4 +24,5 @@ app.get('/proxy/funnelback', async (req, res) => {
     }
 });
 
-app.listen(3000, () => console.log('Proxy running on port 3000'));
+// 🚀 Correct Vercel export
+module.exports = app;
