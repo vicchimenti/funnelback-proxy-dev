@@ -1,10 +1,11 @@
 {
   "version": 2,
-  "builds": [
-    { "src": "api/server.js", "use": "@vercel/node" }
-  ],
+  "functions": {
+    "api/test.js": { "runtime": "@vercel/node" },
+    "api/server.js": { "runtime": "@vercel/node" }
+  },
   "routes": [
-    { "src": "/proxy/funnelback", "dest": "/api/server" },
-    { "src": "/api/.*", "dest": "/api/server" }
+    { "src": "/api/test", "dest": "/api/test" },
+    { "src": "/proxy/funnelback", "dest": "/api/server" }
   ]
 }
