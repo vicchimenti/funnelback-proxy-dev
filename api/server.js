@@ -6,6 +6,11 @@ async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+    // Log IP address information
+    const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    console.log('User IP:', userIp);
+    console.log('Full Headers:', req.headers);
+
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
@@ -21,17 +26,27 @@ async function handler(req, res) {
             ...req.query
         };
 
+        console.log('Making request to Funnelback with IP:', userIp);
+        
         const response = await axios.get(funnelbackUrl, {
             params: params,
             headers: {
-                'Accept': 'text/html'
+                'Accept': 'text/html',
+                'X-Forwarded-For': userIp  // Forward the user's IP to Funnelback
             }
         });
 
-        // Send as text instead of JSON
+        // Log the response headers from Funnelback
+        console.log('Funnelback Response Headers:', response.headers);
+
         res.send(response.data);
     } catch (error) {
-        console.error('Error details:', error.response?.data || error.message);
+        console.error('Error details:', {
+            message: error.message,
+            status: error.response?.status,
+            headers: error.response?.headers,
+            data: error.response?.data
+        });
         res.status(500).send('Search error: ' + (error.response?.data || error.message));
     }
 }
