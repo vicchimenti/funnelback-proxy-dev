@@ -1,18 +1,25 @@
 const axios = require('axios');
 
 async function handler(req, res) {
+    // Enable CORS for Seattle University domain
+    res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+
     try {
-        console.log('Function called');
-        console.log('Request query:', req.query);
-        
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
         
-        // Combine default parameters with any additional query parameters
         const params = {
             collection: 'seattleu~sp-search',
             profile: '_default',
             form: 'partial',
-            ...req.query  // This allows overriding defaults if needed
+            ...req.query
         };
 
         console.log('Making request to Funnelback with params:', params);
