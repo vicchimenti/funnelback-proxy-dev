@@ -4,7 +4,7 @@ const cors = require('cors');
 
 const app = express();
 
-// Enable CORS for your frontend domain
+// Enable CORS for Seattle University domain
 app.use(cors({ origin: 'https://www.seattleu.edu' }));
 
 // Define API route
@@ -24,5 +24,5 @@ app.get('/proxy/funnelback', async (req, res) => {
     }
 });
 
-// 🚀 Correct Vercel export
+// ✅ Correct export for Vercel
 module.exports = app;
