@@ -1,8 +1,5 @@
 {
     "version": 2,
-    "functions": {
-        "api/server.js": { "runtime": "@vercel/node@latest" }
-    },
     "routes": [
         { "src": "/proxy/funnelback", "dest": "/api/server" }
     ]
