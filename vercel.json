@@ -1,6 +1,8 @@
 {
     "version": 2,
     "routes": [
-        { "src": "/proxy/funnelback", "dest": "/api/server" }
+        { "src": "/proxy/funnelback/search", "dest": "/api/search.js" },
+        { "src": "/proxy/funnelback/tools", "dest": "/api/tools.js" },
+        { "src": "/proxy/funnelback/spelling", "dest": "/api/spelling.js" }
     ]
 }
