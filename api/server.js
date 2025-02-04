@@ -2,13 +2,19 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 
-const app = express();
+// Instead of creating an app, we'll export a handler function directly
+async function handler(req, res) {
+    // Enable CORS for Seattle University domain
+    res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-// Enable CORS for Seattle University domain
-app.use(cors({ origin: 'https://www.seattleu.edu' }));
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
 
-// Define API route
-app.get('/proxy/funnelback', async (req, res) => {
     try {
         const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
@@ -22,7 +28,7 @@ app.get('/proxy/funnelback', async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
-});
+}
 
-// ✅ Correct export for Vercel
-module.exports = app;
+// Export the handler function directly
+module.exports = handler;
