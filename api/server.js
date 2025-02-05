@@ -47,8 +47,8 @@ async function handler(req, res) {
     }
 
     try {
-        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/suggest.json';
-        
+        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
+                
         // Add default parameters if not provided
         const params = {
             collection: 'seattleu~sp-search',
