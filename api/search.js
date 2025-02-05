@@ -45,8 +45,8 @@ async function handler(req, res) {
     }
 
     try {
-        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/suggest.json';
-        
+        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
+                
         console.log('Making Funnelback search request:');
         console.log('- URL:', funnelbackUrl);
         console.log('- Parameters:', req.query);
