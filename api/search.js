@@ -11,7 +11,7 @@
  * - Detailed logging of search requests
  * 
  * @author Victor Chimenti
- * @version 1.1.0
+ * @version 1.1.1
  * @license MIT
  */
 
@@ -46,7 +46,7 @@ async function handler(req, res) {
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
-                
+
         console.log('Making Funnelback search request:');
         console.log('- URL:', funnelbackUrl);
         console.log('- Parameters:', req.query);
