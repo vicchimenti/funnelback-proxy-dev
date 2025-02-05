@@ -11,7 +11,7 @@
  * - Detailed logging of search requests
  * 
  * @author Victor Chimenti
- * @version 1.0.1
+ * @version 1.1.0
  * @license MIT
  */
 
