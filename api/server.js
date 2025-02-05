@@ -12,7 +12,7 @@
  * - Error handling and logging
  * 
  * @author Victor Chimenti
- * @version 1.0.0
+ * @version 1.0.1
  * @license MIT
  */
 
