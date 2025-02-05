@@ -12,7 +12,7 @@
  * - Error handling and logging
  * 
  * @author Victor Chimenti
- * @version 1.0.1
+ * @version 1.0.2
  * @license MIT
  */
 
@@ -48,7 +48,7 @@ async function handler(req, res) {
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
-                
+
         // Add default parameters if not provided
         const params = {
             collection: 'seattleu~sp-search',
