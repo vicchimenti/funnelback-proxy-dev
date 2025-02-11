@@ -13,7 +13,7 @@
 * - Comprehensive error handling with detailed logging
 * 
 * @author Victor Chimenti
-* @version 1.2.2
+* @version 1.2.3
 * @license MIT
 */
 
@@ -111,35 +111,58 @@ function logEvent(level, message, data = {}) {
 * @returns {Array<Object>} Enriched suggestions with metadata
 */
 function enrichSuggestions(suggestions, query) {
-    return suggestions.map(suggestion => {
-        const suggestionLower = suggestion.toLowerCase();
+    // Log incoming request parameters
+    console.log('Enrichment Request Parameters:', {
+        isProgramTab: Boolean(query['f.Tabs|programMain']),
+        isStaffTab: Boolean(query['f.Tabs|seattleu~ds-staff']),
+        tabParameters: {
+            program: query['f.Tabs|programMain'],
+            staff: query['f.Tabs|seattleu~ds-staff']
+        }
+    });
+
+    // Determine which tab made the request
+    const isProgramTab = Boolean(query['f.Tabs|programMain']);
+    const isStaffTab = Boolean(query['f.Tabs|seattleu~ds-staff']);
+
+    const enrichedSuggestions = suggestions.map(suggestion => {
         let metadata = {
             tabs: []
         };
         
-        // Check for program indicators
-        if (query['f.Tabs|programMain'] && 
-            (suggestionLower.includes('program') || 
-             suggestionLower.includes('degree') || 
-             suggestionLower.includes('academic'))) {
+        // Add tab information based on the source of the request
+        if (isProgramTab) {
             metadata.tabs.push('program-main');
         }
-        
-        // Check for staff indicators
-        if (query['f.Tabs|seattleu~ds-staff'] && 
-            (suggestionLower.includes('faculty') || 
-             suggestionLower.includes('staff') || 
-             suggestionLower.includes('directory'))) {
+        if (isStaffTab) {
             metadata.tabs.push('Faculty & Staff');
         }
+
+        // Log each suggestion enrichment
+        console.log('Enriching suggestion:', {
+            original: suggestion,
+            tabs: metadata.tabs,
+            isProgramTab,
+            isStaffTab
+        });
 
         return {
             display: suggestion,
             metadata
         };
     });
-}
 
+    // Log final enriched results
+    console.log('Enrichment complete:', {
+        totalSuggestions: suggestions.length,
+        enrichedSuggestions: enrichedSuggestions.map(s => ({
+            display: s.display,
+            tabs: s.metadata.tabs
+        }))
+    });
+
+    return enrichedSuggestions;
+}
 /**
 * Handler for suggestion requests to Funnelback search service
 * 
