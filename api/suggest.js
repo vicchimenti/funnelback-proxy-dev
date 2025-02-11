@@ -13,7 +13,7 @@
 * - Comprehensive error handling with detailed logging
 * 
 * @author Victor Chimenti
-* @version 1.2.1
+* @version 1.2.2
 * @license MIT
 */
 
@@ -104,6 +104,43 @@ function logEvent(level, message, data = {}) {
 }
 
 /**
+* Enriches suggestions with metadata based on content and tab parameters
+* 
+* @param {Array<string>} suggestions - Raw suggestions from Funnelback
+* @param {Object} query - Query parameters including tab information
+* @returns {Array<Object>} Enriched suggestions with metadata
+*/
+function enrichSuggestions(suggestions, query) {
+    return suggestions.map(suggestion => {
+        const suggestionLower = suggestion.toLowerCase();
+        let metadata = {
+            tabs: []
+        };
+        
+        // Check for program indicators
+        if (query['f.Tabs|programMain'] && 
+            (suggestionLower.includes('program') || 
+             suggestionLower.includes('degree') || 
+             suggestionLower.includes('academic'))) {
+            metadata.tabs.push('program-main');
+        }
+        
+        // Check for staff indicators
+        if (query['f.Tabs|seattleu~ds-staff'] && 
+            (suggestionLower.includes('faculty') || 
+             suggestionLower.includes('staff') || 
+             suggestionLower.includes('directory'))) {
+            metadata.tabs.push('Faculty & Staff');
+        }
+
+        return {
+            display: suggestion,
+            metadata
+        };
+    });
+}
+
+/**
 * Handler for suggestion requests to Funnelback search service
 * 
 * @param {Object} req - Express request object
@@ -143,22 +180,25 @@ async function handler(req, res) {
        });
 
        const response = await axios.get(funnelbackUrl, {
-           params: req.query,
-           headers: {
-               'Accept': 'application/json',
-               'X-Forwarded-For': userIp
-           }
-       });
+        params: req.query,
+        headers: {
+            'Accept': 'application/json',
+            'X-Forwarded-For': userIp
+        }
+    });
 
-       logEvent('info', 'Response received', {
-           status: response.status,
-           processingTime: `${Date.now() - startTime}ms`,
-           suggestionsCount: response.data.length || 0,
-           query: req.query,
-           headers: req.headers
-       });
+    // Enrich suggestions with metadata
+    const enrichedResponse = enrichSuggestions(response.data, req.query);
 
-       res.json(response.data);
+    logEvent('info', 'Response enriched', {
+        status: response.status,
+        processingTime: `${Date.now() - startTime}ms`,
+        suggestionsCount: enrichedResponse.length || 0,
+        query: req.query,
+        headers: req.headers
+    });
+
+    res.json(enrichedResponse);
    } catch (error) {
        logEvent('error', 'Handler error', {
            query: req.query,
