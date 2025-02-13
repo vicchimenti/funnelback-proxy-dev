@@ -161,7 +161,8 @@ async function handler(req, res) {
             status: response.status,
             processingTime: `${Date.now() - startTime}ms`,
             responseContent: response.data,
-            headers: req.headers
+            headers: req.headers,
+            userIp: userIp
         });
 
 
