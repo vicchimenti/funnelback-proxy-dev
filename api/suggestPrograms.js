@@ -13,7 +13,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 1.3.1
+ * @version 1.3.2
  * @license MIT
  */
 
@@ -47,7 +47,7 @@ function logEvent(level, message, data = {}) {
             ...data.query,
             collection: 'seattleu~ds-programs',
             profile: data.query.profile || '_default',
-            form: data.query.form || 'partial'
+            form: data.query.form || 'simple'
         }
     } : null;
 
