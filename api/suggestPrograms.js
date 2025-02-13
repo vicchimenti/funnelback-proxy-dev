@@ -13,7 +13,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 1.3.2
+ * @version 1.3.3
  * @license MIT
  */
 
