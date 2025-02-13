@@ -20,38 +20,6 @@
 const axios = require('axios');
 const os = require('os');
 
-
-function logEvent(level, message, data = {}) {
-    // Create a simplified log structure with version tag
-    const logEntry = {
-        logVersion: 'v3',
-        service: data.service || 'suggest-people',
-        timestamp: new Date().toISOString(),
-        event: {  // Nest under 'event' to make the change more obvious
-            level,
-            action: message,
-            query: data.query ? {
-                searchTerm: data.query.query || '',
-                collection: data.query.collection,
-                profile: data.query.profile
-            } : null,
-            response: data.status ? {
-                status: data.status,
-                processingTime: data.processingTime,
-                contentPreview: data.responseContent ? 
-                    data.responseContent.substring(0, 500) + '...' : null
-            } : null
-        },
-        client: {  // Group client info together
-            origin: data.headers?.origin || null,
-            userAgent: data.headers?.['user-agent'] || null
-        }
-    };
-    
-    console.log(JSON.stringify(logEntry));
-}
-
-
 /**
  * Creates a standardized log entry for Vercel environment
  * 
