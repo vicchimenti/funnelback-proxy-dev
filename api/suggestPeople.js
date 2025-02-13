@@ -136,9 +136,10 @@ async function handler(req, res) {
             form: 'partial'
         };
         
+        // Log the incoming request
         logEvent('info', 'Request received', {
+            service: 'suggest-people',
             query: queryParams,
-            requestId,
             headers: req.headers
         });
 
@@ -150,16 +151,20 @@ async function handler(req, res) {
             }
         });
 
+        // Log the response with content preview
         logEvent('info', 'Response received', {
+            service: 'suggest-people', // or 'suggest-programs'
+            query: queryParams,
             status: response.status,
             processingTime: `${Date.now() - startTime}ms`,
-            query: queryParams,
+            responseContent: response.data,
             headers: req.headers
         });
 
         res.send(response.data);
     } catch (error) {
         logEvent('error', 'Handler error', {
+            service: 'suggest-people',
             query: req.query,
             error: error.message,
             status: error.response?.status || 500,
@@ -167,10 +172,7 @@ async function handler(req, res) {
             headers: req.headers
         });
         
-        res.status(500).json({
-            error: 'Search error',
-            details: error.response?.data || error.message
-        });
+        res.status(500).send('Error fetching results');
     }
 }
 
