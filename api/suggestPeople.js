@@ -13,7 +13,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 1.3.0
+ * @version 1.3.1
  * @license MIT
  */
 
@@ -130,12 +130,10 @@ async function handler(req, res) {
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
         const queryParams = { 
-            ...req.query,
+            ...req.query, 
             collection: 'seattleu~ds-staff',
-            num_ranks: 5, // Limit results
-            sort: 'title', // Optional: sort by title
             profile: '_default',
-            form: 'json' // Important: get JSON response
+            form: 'partial'
         };
         
         logEvent('info', 'Request received', {
@@ -144,34 +142,22 @@ async function handler(req, res) {
             headers: req.headers
         });
 
+        // Just pass through the response text
         const response = await axios.get(funnelbackUrl, {
             params: queryParams,
             headers: {
-                'Accept': 'application/json'
+                'Accept': 'text/html'
             }
         });
-
-        // Transform the search results into a suggestion-like format
-        const suggestions = response.data.response.resultPacket.results.map(result => ({
-            display: result.title,
-            metadata: {
-                role: result.metaData.role || '',
-                url: result.liveUrl || '',
-                image: result.metaData.thumbnail || '',
-                department: result.metaData.department || '',
-                email: result.metaData.email || ''
-            }
-        }));
 
         logEvent('info', 'Response received', {
             status: response.status,
             processingTime: `${Date.now() - startTime}ms`,
-            suggestionsCount: suggestions.length,
             query: queryParams,
             headers: req.headers
         });
 
-        res.json(suggestions);
+        res.send(response.data);
     } catch (error) {
         logEvent('error', 'Handler error', {
             query: req.query,
