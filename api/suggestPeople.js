@@ -126,6 +126,8 @@ function logEvent(level, message, data = {}) {
 async function handler(req, res) {
     const startTime = Date.now();
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
+    const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
     
     // CORS handling for Seattle University domain
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
@@ -157,7 +159,8 @@ async function handler(req, res) {
         const response = await axios.get(funnelbackUrl, {
             params: queryParams,
             headers: {
-                'Accept': 'text/html'
+                'Accept': 'text/html',
+                'X-Forwarded-For': userIp
             }
         });
 
