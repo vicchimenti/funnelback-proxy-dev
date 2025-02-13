@@ -13,12 +13,44 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 1.3.3
+ * @version 1.3.4
  * @license MIT
  */
 
 const axios = require('axios');
 const os = require('os');
+
+
+function logEvent(level, message, data = {}) {
+    // Create a simplified log structure with version tag
+    const logEntry = {
+        logVersion: 'v3',
+        service: data.service || 'suggest-people',
+        timestamp: new Date().toISOString(),
+        event: {  // Nest under 'event' to make the change more obvious
+            level,
+            action: message,
+            query: data.query ? {
+                searchTerm: data.query.query || '',
+                collection: data.query.collection,
+                profile: data.query.profile
+            } : null,
+            response: data.status ? {
+                status: data.status,
+                processingTime: data.processingTime,
+                contentPreview: data.responseContent ? 
+                    data.responseContent.substring(0, 500) + '...' : null
+            } : null
+        },
+        client: {  // Group client info together
+            origin: data.headers?.origin || null,
+            userAgent: data.headers?.['user-agent'] || null
+        }
+    };
+    
+    console.log(JSON.stringify(logEntry));
+}
+
 
 /**
  * Creates a standardized log entry for Vercel environment
@@ -86,18 +118,28 @@ function logEvent(level, message, data = {}) {
     } : null;
 
     const logEntry = {
-        service: 'suggest-people',
-        level,
-        ...queryParams,
-        action: message,
-        ...requestInfo,
-        response: data.status ? {
-            status: data.status,
-            processingTime: data.processingTime,
-            suggestionsCount: data.suggestionsCount
-        } : null,
-        serverInfo,
-        timestamp: new Date().toISOString()
+        logVersion: 'v3',
+        service: data.service || 'suggest-people',
+        timestamp: new Date().toISOString(),
+        event: {  // Nest under 'event' to make the change more obvious
+            level,
+            action: message,
+            query: data.query ? {
+                searchTerm: data.query.query || '',
+                collection: data.query.collection,
+                profile: data.query.profile
+            } : null,
+            response: data.status ? {
+                status: data.status,
+                processingTime: data.processingTime,
+                contentPreview: data.responseContent ? 
+                    data.responseContent.substring(0, 500) + '...' : null
+            } : null
+        },
+        client: {  // Group client info together
+            origin: data.headers?.origin || null,
+            userAgent: data.headers?.['user-agent'] || null
+        }
     };
     
     console.log(JSON.stringify(logEntry));
@@ -136,6 +178,13 @@ async function handler(req, res) {
             form: 'partial'
         };
 
+        // Log the request
+        logEvent('info', 'Request received', {
+            service: 'suggest-people',
+            query: queryParams,
+            headers: req.headers
+        });
+
         // Just pass through the response text
         const response = await axios.get(funnelbackUrl, {
             params: queryParams,
@@ -144,35 +193,16 @@ async function handler(req, res) {
             }
         });
 
-        function logEvent(level, message, data = {}) {
-            // Create a simplified log structure with version tag
-            const logEntry = {
-                logVersion: 'v2',
-                service: data.service || 'suggest-people',
-                timestamp: new Date().toISOString(),
-                event: {  // Nest under 'event' to make the change more obvious
-                    level,
-                    action: message,
-                    query: data.query ? {
-                        searchTerm: data.query.query || '',
-                        collection: data.query.collection,
-                        profile: data.query.profile
-                    } : null,
-                    response: data.status ? {
-                        status: data.status,
-                        processingTime: data.processingTime,
-                        contentPreview: data.responseContent ? 
-                            data.responseContent.substring(0, 500) + '...' : null
-                    } : null
-                },
-                client: {  // Group client info together
-                    origin: data.headers?.origin || null,
-                    userAgent: data.headers?.['user-agent'] || null
-                }
-            };
-            
-            console.log(JSON.stringify(logEntry));
-        }
+        // Log the successful response
+        logEvent('info', 'Response received', {
+            service: 'suggest-people',
+            query: queryParams,
+            status: response.status,
+            processingTime: `${Date.now() - startTime}ms`,
+            responseContent: response.data,
+            headers: req.headers
+        });
+
 
         res.send(response.data);
     } catch (error) {
