@@ -5,6 +5,8 @@
         { "src": "/proxy/funnelback/search", "dest": "/api/search.js" },
         { "src": "/proxy/funnelback/tools", "dest": "/api/tools.js" },
         { "src": "/proxy/funnelback/spelling", "dest": "/api/spelling.js" },
-        { "src": "/proxy/funnelback/suggest", "dest": "/api/suggest.js" }
+        { "src": "/proxy/funnelback/suggest", "dest": "/api/suggest.js" },
+        { "src": "/proxy/suggestPeople", "dest": "/api/suggestPeople.js" },
+        { "src": "/proxy/suggestPrograms", "dest": "/api/suggestPrograms.js" }
     ]
 }

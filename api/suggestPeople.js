@@ -13,7 +13,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 1.2.0
+ * @version 1.3.1
  * @license MIT
  */
 
@@ -117,27 +117,23 @@ async function handler(req, res) {
     const startTime = Date.now();
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
     
-    // Set CORS headers
+    // CORS handling for Seattle University domain
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
     if (req.method === 'OPTIONS') {
-        logEvent('info', 'OPTIONS request', { 
-            requestId,
-            headers: req.headers
-        });
         res.status(200).end();
         return;
     }
 
     try {
-        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/suggest.json';
+        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
         const queryParams = { 
             ...req.query, 
-            collection: 'seattleu~ds-staff'
+            collection: 'seattleu~ds-staff',
+            profile: '_default',
+            form: 'partial'
         };
         
         logEvent('info', 'Request received', {
@@ -146,23 +142,22 @@ async function handler(req, res) {
             headers: req.headers
         });
 
+        // Just pass through the response text
         const response = await axios.get(funnelbackUrl, {
             params: queryParams,
             headers: {
-                'Accept': 'application/json',
-                'X-Forwarded-For': userIp
+                'Accept': 'text/html'
             }
         });
 
         logEvent('info', 'Response received', {
             status: response.status,
             processingTime: `${Date.now() - startTime}ms`,
-            suggestionsCount: response.data.length || 0,
             query: queryParams,
             headers: req.headers
         });
 
-        res.json(response.data);
+        res.send(response.data);
     } catch (error) {
         logEvent('error', 'Handler error', {
             query: req.query,
@@ -173,7 +168,7 @@ async function handler(req, res) {
         });
         
         res.status(500).json({
-            error: 'Suggestion error',
+            error: 'Search error',
             details: error.response?.data || error.message
         });
     }
