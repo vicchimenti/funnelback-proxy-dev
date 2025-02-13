@@ -144,7 +144,7 @@ async function handler(req, res) {
             ...req.query, 
             collection: 'seattleu~ds-programs',
             profile: '_default',
-            form: 'partial'
+            form: 'simple'
         };
         
         // Log the request
