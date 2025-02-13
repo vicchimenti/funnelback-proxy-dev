@@ -13,7 +13,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 1.3.2
+ * @version 1.3.3
  * @license MIT
  */
 
@@ -135,13 +135,6 @@ async function handler(req, res) {
             profile: '_default',
             form: 'partial'
         };
-        
-        // Log the incoming request
-        logEvent('info', 'Request received', {
-            service: 'suggest-people',
-            query: queryParams,
-            headers: req.headers
-        });
 
         // Just pass through the response text
         const response = await axios.get(funnelbackUrl, {
@@ -151,15 +144,35 @@ async function handler(req, res) {
             }
         });
 
-        // Log the response with content preview
-        logEvent('info', 'Response received', {
-            service: 'suggest-people', // or 'suggest-programs'
-            query: queryParams,
-            status: response.status,
-            processingTime: `${Date.now() - startTime}ms`,
-            responseContent: response.data,
-            headers: req.headers
-        });
+        function logEvent(level, message, data = {}) {
+            // Create a simplified log structure with version tag
+            const logEntry = {
+                logVersion: 'v2',
+                service: data.service || 'suggest-people',
+                timestamp: new Date().toISOString(),
+                event: {  // Nest under 'event' to make the change more obvious
+                    level,
+                    action: message,
+                    query: data.query ? {
+                        searchTerm: data.query.query || '',
+                        collection: data.query.collection,
+                        profile: data.query.profile
+                    } : null,
+                    response: data.status ? {
+                        status: data.status,
+                        processingTime: data.processingTime,
+                        contentPreview: data.responseContent ? 
+                            data.responseContent.substring(0, 500) + '...' : null
+                    } : null
+                },
+                client: {  // Group client info together
+                    origin: data.headers?.origin || null,
+                    userAgent: data.headers?.['user-agent'] || null
+                }
+            };
+            
+            console.log(JSON.stringify(logEntry));
+        }
 
         res.send(response.data);
     } catch (error) {
