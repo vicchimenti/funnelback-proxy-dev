@@ -41,16 +41,6 @@ function logEvent(level, message, data = {}) {
         memory: Math.round(os.totalmem() / 1024 / 1024 / 1024) + 'GB'
     };
 
-    // Format query parameters in the preferred style
-    const queryParams = data.query ? {
-        'Query Parameters': {
-            ...data.query,
-            collection: 'seattleu~ds-staff',
-            profile: data.query.profile || '_default',
-            form: data.query.form || 'simple'
-        }
-    } : null;
-
     // Extract relevant request headers
     const requestInfo = data.headers ? {
         'Request Headers': {
