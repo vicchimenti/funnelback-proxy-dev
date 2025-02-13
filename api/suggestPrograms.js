@@ -86,18 +86,28 @@ function logEvent(level, message, data = {}) {
     } : null;
 
     const logEntry = {
-        service: 'suggest-programs',
-        level,
-        ...queryParams,
-        action: message,
-        ...requestInfo,
-        response: data.status ? {
-            status: data.status,
-            processingTime: data.processingTime,
-            suggestionsCount: data.suggestionsCount
-        } : null,
-        serverInfo,
-        timestamp: new Date().toISOString()
+        service: data.service || 'suggest-programs',
+        logVersion: 'v3',
+        timestamp: new Date().toISOString(),
+        event: {  // Nest under 'event' to make the change more obvious
+            level,
+            action: message,
+            query: data.query ? {
+                searchTerm: data.query.query || '',
+                collection: data.query.collection,
+                profile: data.query.profile
+            } : null,
+            response: data.status ? {
+                status: data.status,
+                processingTime: data.processingTime,
+                contentPreview: data.responseContent ? 
+                    data.responseContent.substring(0, 500) + '...' : null
+            } : null
+        },
+        client: {  // Group client info together
+            origin: data.headers?.origin || null,
+            userAgent: data.headers?.['user-agent'] || null
+        }
     };
     
     console.log(JSON.stringify(logEntry));
@@ -137,9 +147,10 @@ async function handler(req, res) {
             form: 'partial'
         };
         
+        // Log the request
         logEvent('info', 'Request received', {
+            service: 'suggest-programs',
             query: queryParams,
-            requestId,
             headers: req.headers
         });
 
@@ -151,16 +162,20 @@ async function handler(req, res) {
             }
         });
 
+        // Log the successful response
         logEvent('info', 'Response received', {
+            service: 'suggest-programs',
+            query: queryParams,
             status: response.status,
             processingTime: `${Date.now() - startTime}ms`,
-            query: queryParams,
+            responseContent: response.data,
             headers: req.headers
         });
 
         res.send(response.data);
     } catch (error) {
         logEvent('error', 'Handler error', {
+            service: 'suggest-programs',
             query: req.query,
             error: error.message,
             status: error.response?.status || 500,
@@ -168,10 +183,7 @@ async function handler(req, res) {
             headers: req.headers
         });
         
-        res.status(500).json({
-            error: 'Search error',
-            details: error.response?.data || error.message
-        });
+        res.status(500).send('Error fetching results');
     }
 }
 
