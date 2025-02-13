@@ -86,8 +86,8 @@ function logEvent(level, message, data = {}) {
     } : null;
 
     const logEntry = {
-        logVersion: 'v3',
         service: data.service || 'suggest-people',
+        logVersion: 'v3',
         timestamp: new Date().toISOString(),
         event: {  // Nest under 'event' to make the change more obvious
             level,
