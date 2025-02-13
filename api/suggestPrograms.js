@@ -13,7 +13,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 1.3.0
+ * @version 1.3.1
  * @license MIT
  */
 
@@ -131,12 +131,10 @@ async function handler(req, res) {
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
         const queryParams = { 
-            ...req.query,
+            ...req.query, 
             collection: 'seattleu~ds-programs',
-            num_ranks: 5,
-            sort: 'title',
             profile: '_default',
-            form: 'json'
+            form: 'partial'
         };
         
         logEvent('info', 'Request received', {
@@ -145,33 +143,22 @@ async function handler(req, res) {
             headers: req.headers
         });
 
+        // Just pass through the response text
         const response = await axios.get(funnelbackUrl, {
             params: queryParams,
             headers: {
-                'Accept': 'application/json'
+                'Accept': 'text/html'
             }
         });
-
-        // Transform the search results into a suggestion-like format
-        const suggestions = response.data.response.resultPacket.results.map(result => ({
-            display: result.title,
-            metadata: {
-                description: result.metaData.description || '',
-                url: result.liveUrl || '',
-                level: result.metaData.level || '',
-                department: result.metaData.department || ''
-            }
-        }));
 
         logEvent('info', 'Response received', {
             status: response.status,
             processingTime: `${Date.now() - startTime}ms`,
-            suggestionsCount: suggestions.length,
             query: queryParams,
             headers: req.headers
         });
 
-        res.json(suggestions);
+        res.send(response.data);
     } catch (error) {
         logEvent('error', 'Handler error', {
             query: req.query,
