@@ -13,7 +13,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 1.2.0
+ * @version 1.3.0
  * @license MIT
  */
 
@@ -117,27 +117,25 @@ async function handler(req, res) {
     const startTime = Date.now();
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
     
-    // Set CORS headers
+    // CORS handling for Seattle University domain
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
     if (req.method === 'OPTIONS') {
-        logEvent('info', 'OPTIONS request', { 
-            requestId,
-            headers: req.headers
-        });
         res.status(200).end();
         return;
     }
 
     try {
-        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/suggest.json';
+        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
         const queryParams = { 
-            ...req.query, 
-            collection: 'seattleu~ds-staff'
+            ...req.query,
+            collection: 'seattleu~ds-staff',
+            num_ranks: 5, // Limit results
+            sort: 'title', // Optional: sort by title
+            profile: '_default',
+            form: 'json' // Important: get JSON response
         };
         
         logEvent('info', 'Request received', {
@@ -149,20 +147,31 @@ async function handler(req, res) {
         const response = await axios.get(funnelbackUrl, {
             params: queryParams,
             headers: {
-                'Accept': 'application/json',
-                'X-Forwarded-For': userIp
+                'Accept': 'application/json'
             }
         });
+
+        // Transform the search results into a suggestion-like format
+        const suggestions = response.data.response.resultPacket.results.map(result => ({
+            display: result.title,
+            metadata: {
+                role: result.metaData.role || '',
+                url: result.liveUrl || '',
+                image: result.metaData.thumbnail || '',
+                department: result.metaData.department || '',
+                email: result.metaData.email || ''
+            }
+        }));
 
         logEvent('info', 'Response received', {
             status: response.status,
             processingTime: `${Date.now() - startTime}ms`,
-            suggestionsCount: response.data.length || 0,
+            suggestionsCount: suggestions.length,
             query: queryParams,
             headers: req.headers
         });
 
-        res.json(response.data);
+        res.json(suggestions);
     } catch (error) {
         logEvent('error', 'Handler error', {
             query: req.query,
@@ -173,7 +182,7 @@ async function handler(req, res) {
         });
         
         res.status(500).json({
-            error: 'Suggestion error',
+            error: 'Search error',
             details: error.response?.data || error.message
         });
     }
