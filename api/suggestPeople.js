@@ -14,7 +14,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 2.0.0
+ * @version 2.0.1
  * @license MIT
  */
 
@@ -79,7 +79,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '2.0.0',
+        logVersion: '2.0.1',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -154,7 +154,8 @@ async function handler(req, res) {
             profile: '_default',
             query: req.query.query,
             'f.Tabs|seattleu|ds-staff': 'Faculty & Staff',
-            collection: 'seattleu~sp-search'
+            collection: 'seattleu~sp-search',
+            num_ranks: 5
         };
 
         // Log the request
@@ -170,6 +171,16 @@ async function handler(req, res) {
                 'Accept': 'application/json',
                 'X-Forwarded-For': userIp
             }
+        });
+
+        // Log raw response for debugging
+        logEvent('debug', 'Raw Funnelback response', {
+            service: 'suggest-people',
+            query: queryParams,
+            status: response.status,
+            processingTime: `${Date.now() - startTime}ms`,
+            responseContent: JSON.stringify(response.data),
+            headers: req.headers,
         });
 
         // Extract and format results
