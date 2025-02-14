@@ -143,6 +143,13 @@ async function handler(req, res) {
     const startTime = Date.now();
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
     const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    const query = { 
+        ...req.query, 
+        collection: 'seattleu~ds-programs',
+        profile: '_default',
+        num_ranks: 5
+    };
     
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
@@ -156,12 +163,7 @@ async function handler(req, res) {
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
-        const query = { 
-            ...req.query, 
-            collection: 'seattleu~ds-programs',
-            profile: '_default',
-            num_ranks: 5
-        };
+
         
         // Log the request
         logEvent('info', 'Programs search request received', {
