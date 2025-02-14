@@ -155,7 +155,7 @@ async function handler(req, res) {
             query: req.query.query,
             'f.Tabs|seattleu|ds-staff': 'Faculty & Staff',
             collection: 'seattleu~sp-search',
-            numranks: 5
+            num_ranks: 5
         };
 
         // Log detailed request info
