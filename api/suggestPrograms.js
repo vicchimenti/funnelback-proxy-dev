@@ -3,13 +3,13 @@
  * 
  * Handles academic program search requests for the "seattleu~ds-programs" collection.
  * Provides optimized search results for academic programs, returning the top 5 matches
- * with cleaned and formatted data ready for frontend consumption. Implements structured 
- * logging for Vercel serverless environment with proper query parameter handling.
+ * with cleaned and formatted data ready for frontend consumption. Maps directly to
+ * Funnelback's native result structure.
  * 
  * Features:
  * - JSON endpoint integration with Funnelback
  * - Limited to top 5 most relevant results
- * - Response formatting optimized for frontend usage
+ * - Direct mapping of Funnelback result structure
  * - Title cleaning and HTML tag removal
  * - CORS handling for Seattle University domain
  * - Structured JSON logging with proper query tracking
@@ -17,7 +17,7 @@
  * - Comprehensive error handling
  * 
  * @author Victor Chimenti
- * @version 1.5.3
+ * @version 1.6.0
  * @license MIT
  */
 
@@ -44,12 +44,11 @@ function cleanProgramTitle(title) {
 
 /**
  * Creates a standardized log entry for Vercel environment with enhanced program metadata
- * and proper query parameter handling
  * 
  * @param {string} level - Log level ('info', 'warn', 'error')
  * @param {string} message - Main log message/action
  * @param {Object} data - Additional data to include in log
- * @param {Object} [data.query] - Query parameters object
+ * @param {Object} [data.query] - Query parameters
  * @param {Object} [data.headers] - Request headers
  * @param {number} [data.status] - HTTP status code
  * @param {string} [data.processingTime] - Request processing duration
@@ -57,6 +56,33 @@ function cleanProgramTitle(title) {
  * @param {string} [data.error] - Error message if applicable
  */
 function logEvent(level, message, data = {}) {
+    const userIp = data.headers?.['x-forwarded-for'] || 
+                   data.headers?.['x-real-ip'] || 
+                   data.headers?.['x-vercel-proxied-for'] || 
+                   'unknown';
+
+    // Format server info more concisely
+    const serverInfo = {
+        host: os.hostname(),
+        platform: `${os.platform()}-${os.arch()}`,
+        resources: {
+            cpus: os.cpus().length,
+            memory: `${Math.round(os.totalmem() / 1024 / 1024 / 1024)}GB`
+        }
+    };
+
+    // Format location data if available
+    const locationInfo = data.headers ? {
+        city: decodeURIComponent(data.headers['x-vercel-ip-city'] || ''),
+        region: data.headers['x-vercel-ip-country-region'],
+        country: data.headers['x-vercel-ip-country'],
+        timezone: data.headers['x-vercel-ip-timezone'],
+        coordinates: {
+            lat: data.headers['x-vercel-ip-latitude'],
+            long: data.headers['x-vercel-ip-longitude']
+        }
+    } : null;
+
     // Format query parameters more concisely
     const queryInfo = data.query ? {
         searchTerm: data.query.query || '',
@@ -64,27 +90,28 @@ function logEvent(level, message, data = {}) {
         profile: data.query.profile || '_default'
     } : null;
 
+    // Format request metadata
+    const requestMeta = data.headers ? {
+        origin: data.headers.origin,
+        referer: data.headers.referer,
+        userAgent: data.headers['user-agent'],
+        deploymentUrl: data.headers['x-vercel-deployment-url'],
+        vercelId: data.headers['x-vercel-id']
+    } : null;
+
     const logEntry = {
         service: 'suggest-programs',
-        hostname: os.hostname(),
+        version: '1.6.0',
         timestamp: new Date().toISOString(),
-        version: '1.5.3',
         level,
         message,
-        userIp: data.headers?.['x-forwarded-for'] || 
-               data.headers?.['x-real-ip'] || 
-               data.headers?.['x-vercel-proxied-for'] || 
-               'unknown',
+        userIp,
         request: {
             query: queryInfo,
-            meta: data.headers ? {
-                origin: data.headers.origin,
-                referer: data.headers.referer,
-                userAgent: data.headers['user-agent'],
-                deploymentUrl: data.headers['x-vercel-deployment-url'],
-                vercelId: data.headers['x-vercel-id']
-            } : null
+            meta: requestMeta
         },
+        location: locationInfo,
+        server: serverInfo,
         performance: data.processingTime ? {
             duration: data.processingTime,
             status: data.status
@@ -102,14 +129,14 @@ function logEvent(level, message, data = {}) {
     // For successful responses with content
     if (data.responseContent) {
         const responsePreview = {
-            totalResults: data.responseContent.metadata?.totalResults,
-            queryTime: data.responseContent.metadata?.queryTime,
-            programs: data.responseContent.programs?.map(program => ({
+            totalResults: data.responseContent.metadata.totalResults,
+            queryTime: data.responseContent.metadata.queryTime,
+            programs: data.responseContent.programs.map(program => ({
                 rank: program.id,
                 title: program.title,
                 type: program.details.type,
                 school: program.details.school
-            })) || []
+            }))
         };
 
         logEntry.response = {
@@ -153,6 +180,7 @@ async function handler(req, res) {
         form: 'partial'
     };
     
+    
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -166,15 +194,11 @@ async function handler(req, res) {
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
 
-        
         // Log the request
         logEvent('info', 'Programs search request received', {
             query: query,
             headers: req.headers
         });
-
-        // Log the actual URL we're hitting
-        console.log('Funnelback URL:', `${funnelbackUrl}?${new URLSearchParams(query)}`);
 
         // Make the request with explicit JSON headers
         const response = await axios.get(funnelbackUrl, {
@@ -186,57 +210,36 @@ async function handler(req, res) {
             }
         });
 
-        // Debug log for raw response
-        console.log('Raw Response:', {
-            status: response.status,
-            contentType: response.headers['content-type'],
+        // Log raw response for debugging
+        console.log('Raw Response Structure:', {
             hasResults: !!response.data.results,
-            resultsCount: response.data.results?.length
-        });
-
-        // Verify we received JSON response
-        if (!response.headers['content-type']?.includes('application/json')) {
-            throw new Error('Invalid response format from Funnelback');
-        }
-
-        console.log('Raw Funnelback Response:', {
-            hasResults: !!response.data.results,
-            resultsLength: response.data.results?.length,
+            resultCount: response.data.results?.length,
             firstResult: response.data.results?.[0]
         });
-        
-        // Add null checks in formatted response
+
+        // Format response for frontend consumption
         const formattedResponse = {
             metadata: {
-                totalResults: response.data.totalMatches || 0,
+                totalResults: response.data.totalMatching || 0,
                 queryTime: response.data.queryTime || 0,
                 searchTerm: query.query || ''
             },
-            programs: Array.isArray(response.data.results) 
-                ? response.data.results.map(result => ({
-                    id: result.rank || 0,
-                    title: cleanProgramTitle(result.title || ''),
-                    url: result.liveUrl || '',
-                    details: {
-                        type: result.listMetadata?.programCredentialType?.[0] || null,
-                        school: result.listMetadata?.provider?.[0] || null,
-                        credits: result.listMetadata?.credits?.[0] || null,
-                        area: result.listMetadata?.areaOfStudy?.[0] || null,
-                        level: result.listMetadata?.category?.[0] || null,
-                        mode: result.listMetadata?.programMode?.[0] || null
-                    },
-                    image: result.listMetadata?.image?.[0] || null,
-                    description: result.listMetadata?.c?.[0] || null
-                }))
-                : []
+            programs: (response.data.results || []).map(result => ({
+                id: result.rank,
+                title: cleanProgramTitle(result.title),
+                url: result.liveUrl,
+                details: {
+                    type: result.listMetadata?.programCredentialType?.[0] || null,
+                    school: result.listMetadata?.provider?.[0] || null,
+                    credits: result.listMetadata?.credits?.[0] || null,
+                    area: result.listMetadata?.areaOfStudy?.[0] || null,
+                    level: result.listMetadata?.category?.[0] || null,
+                    mode: result.listMetadata?.programMode?.[0] || null
+                },
+                image: result.listMetadata?.image?.[0] || null,
+                description: result.listMetadata?.c?.[0] || null
+            }))
         };
-        
-        // Add debug logging for formatted response
-        console.log('Formatted Response:', {
-            hasPrograms: !!formattedResponse.programs,
-            programsLength: formattedResponse.programs.length,
-            firstProgram: formattedResponse.programs[0]
-        });
 
         // Log the successful response
         logEvent('info', 'Programs search completed', {
