@@ -17,7 +17,7 @@
  * - Comprehensive error handling
  * 
  * @author Victor Chimenti
- * @version 1.5.0
+ * @version 1.5.1
  * @license MIT
  */
 
@@ -147,6 +147,17 @@ function logEvent(level, message, data = {}) {
         };
     }
 
+    // Log raw response for debugging
+    logEvent('info', 'Raw Funnelback response received', {
+        query: queryParams,
+        status: response.status,
+        responseContent: {
+            hasResults: !!response.data.results,
+            resultsLength: response.data.results?.length,
+            rawResponse: response.data
+        }
+    });
+
     // Clean up null values for cleaner logs
     Object.keys(logEntry).forEach(key => {
         if (logEntry[key] === null || logEntry[key] === undefined) {
@@ -186,11 +197,13 @@ async function handler(req, res) {
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
+        // Ensure num_ranks is properly set in query
         const queryParams = { 
             ...req.query, 
             collection: 'seattleu~ds-programs',
             profile: '_default',
-            num_ranks: 5  // Limit to top 5 results
+            num_ranks: 5,
+            form: req.query.form || 'partial'  // Add default form value
         };
         
         // Log the request
@@ -214,28 +227,35 @@ async function handler(req, res) {
             throw new Error('Invalid response format from Funnelback');
         }
 
-        // Format response for frontend consumption
+        // Add defensive checks
+        if (!response.data || !response.data.results) {
+            throw new Error('Invalid response structure from Funnelback: missing results array');
+        }
+
+        // Format response with null checks
         const formattedResponse = {
             metadata: {
-                totalResults: response.data.totalMatches,
-                queryTime: response.data.queryTime,
+                totalResults: response.data.totalMatches || 0,
+                queryTime: response.data.queryTime || 0,
                 searchTerm: queryParams.query || ''
             },
-            programs: response.data.results.map(result => ({
-                id: result.rank,
-                title: cleanProgramTitle(result.title),
-                url: result.liveUrl,
-                details: {
-                    type: result.listMetadata?.programCredentialType?.[0] || null,
-                    school: result.listMetadata?.provider?.[0] || null,
-                    credits: result.listMetadata?.credits?.[0] || null,
-                    area: result.listMetadata?.areaOfStudy?.[0] || null,
-                    level: result.listMetadata?.category?.[0] || null,
-                    mode: result.listMetadata?.programMode?.[0] || null
-                },
-                image: result.listMetadata?.image?.[0] || null,
-                description: result.listMetadata?.c?.[0] || null
-            }))
+            programs: Array.isArray(response.data.results) 
+                ? response.data.results.map(result => ({
+                    id: result.rank || 0,
+                    title: cleanProgramTitle(result.title || ''),
+                    url: result.liveUrl || '',
+                    details: {
+                        type: result.listMetadata?.programCredentialType?.[0] || null,
+                        school: result.listMetadata?.provider?.[0] || null,
+                        credits: result.listMetadata?.credits?.[0] || null,
+                        area: result.listMetadata?.areaOfStudy?.[0] || null,
+                        level: result.listMetadata?.category?.[0] || null,
+                        mode: result.listMetadata?.programMode?.[0] || null
+                    },
+                    image: result.listMetadata?.image?.[0] || null,
+                    description: result.listMetadata?.c?.[0] || null
+                }))
+                : []
         };
 
         // Log the successful response
