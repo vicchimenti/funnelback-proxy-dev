@@ -14,7 +14,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 2.1.2
+ * @version 2.1.3
  * @license MIT
  */
 
@@ -73,7 +73,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '2.1.2',
+        logVersion: '2.1.3',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -137,6 +137,9 @@ async function handler(req, res) {
 
         const url = `${funnelbackUrl}?${queryString}`;
 
+        // Log the exact URL for debugging
+        console.log('DEBUG - Exact Funnelback URL:', url);
+
         // Log request details
         logEvent('debug', 'Outgoing request details', {
             service: 'suggest-people',
@@ -145,12 +148,16 @@ async function handler(req, res) {
             headers: req.headers
         });
 
+        console.log('DEBUG - Making request to Funnelback with URL:', url);
         const response = await axios.get(url, {
             headers: {
                 'Accept': 'application/json',
                 'X-Forwarded-For': userIp
             }
         });
+        console.log('DEBUG - Response status:', response.status);
+        console.log('DEBUG - Response data type:', response.data?.response?.resultPacket?.results ? 'Has results' : 'No results');
+        console.log('DEBUG - Number of results:', response.data?.response?.resultPacket?.results?.length || 0);
 
         // Log the successful response
         logEvent('info', 'Response received', {
