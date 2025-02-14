@@ -14,7 +14,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 2.2.2
+ * @version 2.2.3
  * @license MIT
  */
 
@@ -73,7 +73,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '2.2.2',
+        logVersion: '2.2.3',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -183,13 +183,23 @@ async function handler(req, res) {
         });
 
         // Format and send response
-        const formattedResults = (response.data?.response?.resultPacket?.results || []).map(result => ({
-            title: cleanTitle(result.title) || '',
-            metadata: result.listMetadata?.affiliation?.[0] || result.listMetadata?.peoplePosition?.[0] || 'Faculty/Staff',
-            department: result.listMetadata?.peopleDepartment?.[0] || result.listMetadata?.college?.[0] || '',
-            url: result.liveUrl || '', // Only use liveUrl for direct profile links
-            image: result.listMetadata?.image?.[0] || null
-        }));
+        const formattedResults = (response.data?.response?.resultPacket?.results || []).map(result => {
+            // Extract and clean metadata fields
+            const affiliation = result.listMetadata?.affiliation?.[0] ? cleanTitle(result.listMetadata.affiliation[0]) : null;
+            const position = result.listMetadata?.peoplePosition?.[0] ? cleanTitle(result.listMetadata.peoplePosition[0]) : null;
+            const department = result.listMetadata?.peopleDepartment?.[0] ? cleanTitle(result.listMetadata.peopleDepartment[0]) : null;
+            const college = result.listMetadata?.college?.[0] ? cleanTitle(result.listMetadata.college[0]) : null;
+
+            return {
+                title: cleanTitle(result.title) || '',
+                affiliation: affiliation,
+                position: position,
+                department: department,
+                college: college,
+                url: result.liveUrl || '',
+                image: result.listMetadata?.image?.[0] || null
+            };
+        });
         res.setHeader('Content-Type', 'application/json');
         res.send(formattedResults);
 
