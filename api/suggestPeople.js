@@ -14,7 +14,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 2.1.3
+ * @version 2.1.4
  * @license MIT
  */
 
@@ -73,7 +73,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '2.1.3',
+        logVersion: '2.1.4',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -130,7 +130,7 @@ async function handler(req, res) {
             'form=partial',
             'profile=_default',
             `query=${encodeURIComponent(req.query.query)}`,
-            'f.Tabs%7Cseattleu%7CEds-staff=Faculty+%26+Staff',
+            'f.Tabs%7Cseattleu%7Eds-staff=Faculty+%26+Staff',
             'collection=seattleu~sp-search',
             'num_ranks=5'
         ].join('&');
