@@ -200,6 +200,9 @@ async function handler(req, res) {
             headers: req.headers
         });
 
+        // Log the actual URL we're hitting
+        console.log('Funnelback URL:', `${funnelbackUrl}?${new URLSearchParams(query)}`);
+
         // Make the request with explicit JSON headers
         const response = await axios.get(funnelbackUrl, {
             params: query,
