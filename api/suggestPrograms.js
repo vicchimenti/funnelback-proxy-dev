@@ -3,13 +3,13 @@
  * 
  * Handles academic program search requests for the "seattleu~ds-programs" collection.
  * Provides optimized search results for academic programs, returning the top 5 matches
- * with cleaned and formatted data ready for frontend consumption. Maps directly to
- * Funnelback's native result structure.
+ * with cleaned and formatted data ready for frontend consumption. Maps to Funnelback's
+ * native response structure following the correct path: response -> resultPacket -> results.
  * 
  * Features:
  * - JSON endpoint integration with Funnelback
  * - Limited to top 5 most relevant results
- * - Direct mapping of Funnelback result structure
+ * - Correct response path traversal
  * - Title cleaning and HTML tag removal
  * - CORS handling for Seattle University domain
  * - Structured JSON logging with proper query tracking
@@ -17,7 +17,7 @@
  * - Comprehensive error handling
  * 
  * @author Victor Chimenti
- * @version 1.6.0
+ * @version 1.7.1
  * @license MIT
  */
 
@@ -101,7 +101,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-programs',
-        version: '1.6.0',
+        version: '1.7.1',
         timestamp: new Date().toISOString(),
         level,
         message,
@@ -167,6 +167,18 @@ function logEvent(level, message, data = {}) {
  * @param {Object} res - Express response object
  * @returns {Promise<void>} - Resolves when the response has been sent
  */
+/**
+ * Handler for program search requests to Funnelback search service
+ * Processes requests through JSON endpoint and returns top 5 results.
+ * Correctly traverses Funnelback's response structure to extract program data.
+ * 
+ * @param {Object} req - Express request object
+ * @param {Object} req.query - Query parameters from the request
+ * @param {Object} req.headers - Request headers
+ * @param {string} req.method - HTTP method of the request
+ * @param {Object} res - Express response object
+ * @returns {Promise<void>} - Resolves when the response has been sent
+ */
 async function handler(req, res) {
     const startTime = Date.now();
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
@@ -180,7 +192,6 @@ async function handler(req, res) {
         form: 'partial'
     };
     
-    
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -193,15 +204,12 @@ async function handler(req, res) {
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
-
+        
         // Log the request
         logEvent('info', 'Programs search request received', {
             query: query,
             headers: req.headers
         });
-
-        // Log the actual URL we're hitting
-        console.log('Funnelback URL:', `${funnelbackUrl}?${new URLSearchParams(query)}`);
 
         // Make the request with explicit JSON headers
         const response = await axios.get(funnelbackUrl, {
@@ -213,21 +221,26 @@ async function handler(req, res) {
             }
         });
 
-        // Log raw response for debugging
-        console.log('Raw Response Structure:', {
-            hasResults: !!response.data.results,
-            resultCount: response.data.results?.length,
-            firstResult: response.data.results?.[0]
+        // Log the actual URL we're hitting
+        console.log('Funnelback URL:', `${funnelbackUrl}?${new URLSearchParams(query)}`);
+
+        // Log raw response structure for debugging
+        console.log('Raw Response Path Check:', {
+            hasQuestion: !!response.data.question,
+            hasResponse: !!response.data.response,
+            hasResultPacket: !!response.data.response?.resultPacket,
+            hasResults: !!response.data.response?.resultPacket?.results,
+            resultCount: response.data.response?.resultPacket?.results?.length || 0
         });
 
-        // Format response for frontend consumption
+        // Format response for frontend consumption with correct path traversal
         const formattedResponse = {
             metadata: {
-                totalResults: response.data.totalMatching || 0,
-                queryTime: response.data.queryTime || 0,
+                totalResults: response.data.response?.resultPacket?.resultsSummary?.totalMatching || 0,
+                queryTime: response.data.response?.resultPacket?.resultsSummary?.queryTime || 0,
                 searchTerm: query.query || ''
             },
-            programs: (response.data.results || []).map(result => ({
+            programs: (response.data.response?.resultPacket?.results || []).map(result => ({
                 id: result.rank,
                 title: cleanProgramTitle(result.title),
                 url: result.liveUrl,
