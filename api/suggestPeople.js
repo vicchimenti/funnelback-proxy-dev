@@ -14,7 +14,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 2.1.4
+ * @version 2.2.1
  * @license MIT
  */
 
@@ -73,7 +73,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '2.1.4',
+        logVersion: '2.2.1',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -170,7 +170,13 @@ async function handler(req, res) {
         });
 
         // Format and send response
-        const formattedResults = response.data?.response?.resultPacket?.results || [];
+        const formattedResults = (response.data?.response?.resultPacket?.results || []).map(result => ({
+            title: result.title || '',
+            metadata: result.listMetadata?.affiliation?.[0] || result.listMetadata?.peoplePosition?.[0] || 'Faculty/Staff',
+            department: result.listMetadata?.peopleDepartment?.[0] || result.listMetadata?.college?.[0] || '',
+            url: result.liveUrl || '', // Only use liveUrl for direct profile links
+            image: result.listMetadata?.image?.[0] || null
+        }));
         res.setHeader('Content-Type', 'application/json');
         res.send(formattedResults);
 
