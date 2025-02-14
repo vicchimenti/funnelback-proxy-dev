@@ -197,13 +197,11 @@ async function handler(req, res) {
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
-        // Ensure num_ranks is properly set in query
         const queryParams = { 
             ...req.query, 
             collection: 'seattleu~ds-programs',
             profile: '_default',
-            num_ranks: 5,
-            form: req.query.form || 'partial'  // Add default form value
+            num_ranks: 5  // Keep only the essential parameters
         };
         
         // Log the request
