@@ -1,19 +1,20 @@
 /**
  * @fileoverview Suggestion Handler for Funnelback Search Integration (People)
  * 
- * Handles autocomplete suggestion requests for the "seattleu~ds-staff" collection.
- * Provides real-time search suggestions for faculty and staff searches with
- * structured logging for Vercel serverless environment.
+ * Handles autocomplete suggestion requests for faculty and staff searches with
+ * structured logging for Vercel serverless environment. Returns detailed information
+ * including affiliation, college, department, and position data.
  * 
  * Features:
  * - CORS handling for Seattle University domain
  * - Structured JSON logging for Vercel
  * - Request/Response tracking with detailed headers
- * - Query parameter tracking
+ * - Enhanced response format with rich metadata
+ * - Title cleaning and formatting
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 1.3.6
+ * @version 2.0.0
  * @license MIT
  */
 
@@ -30,7 +31,8 @@ const os = require('os');
  * @param {Object} [data.headers] - Request headers
  * @param {number} [data.status] - HTTP status code
  * @param {string} [data.processingTime] - Request processing duration
- * @param {number} [data.suggestionsCount] - Number of suggestions returned
+ * @param {string} [data.responseContent] - Preview of response content
+ * @param {Object} [data.error] - Error details if applicable
  */
 function logEvent(level, message, data = {}) {
     const serverInfo = {
@@ -76,10 +78,10 @@ function logEvent(level, message, data = {}) {
     } : null;
 
     const logEntry = {
-        service: data.service || 'suggest-people',
-        logVersion: 'v3',
+        service: 'suggest-people',
+        logVersion: '2.0.0',
         timestamp: new Date().toISOString(),
-        event: {  // Nest under 'event' to make the change more obvious
+        event: {
             level,
             action: message,
             query: data.query ? {
@@ -92,15 +94,166 @@ function logEvent(level, message, data = {}) {
                 processingTime: data.processingTime,
                 contentPreview: data.responseContent ? 
                     data.responseContent.substring(0, 500) + '...' : null
-            } : null
+            } : null,
+            error: data.error || null
         },
-        client: {  // Group client info together
+        client: {
             origin: data.headers?.origin || null,
             userAgent: data.headers?.['user-agent'] || null
-        }
+        },
+        server: serverInfo,
+        request: requestInfo
     };
     
     console.log(JSON.stringify(logEntry));
+}
+
+/**
+ * Cleans a title string by removing HTML tags and taking only the first part before any pipe character
+ * 
+ * @param {string} title - The raw title string to clean
+ * @returns {string} The cleaned title
+ */
+function cleanTitle(title = '') {
+    return title
+        .split('|')[0]                    // Get first part before pipe
+        .replace(/<\/?[^>]+(>|$)/g, '')   // Remove HTML tags
+        .trim();                          // Remove extra whitespace
+}
+
+/**
+ * Handler for suggestion requests to Funnelback search service
+ * 
+ * @param {Object} req - Express request object
+ * @param {Object} req.query - Query parameters from the request
+ * @param {string} [req.query.query] - Search query string
+ * @param {Object} req.headers - Request headers
+ * @param {string} req.method - HTTP method of the request
+ * @param {Object} res - Express response object
+ * @returns {Promise<void>}
+ */
+async function handler(req, res) {
+    const startTime = Date.now();
+    const requestId = req.headers['x-vercel-id'] || Date.now().toString();
+    const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    // CORS handling for Seattle University domain
+    res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+
+    try {
+        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
+        const queryParams = { 
+            form: 'partial',
+            profile: '_default',
+            query: req.query.query,
+            'f.Tabs|seattleu|ds-staff': 'Faculty & Staff',
+            collection: 'seattleu~sp-search'
+        };
+
+        // Log the request
+        logEvent('info', 'Request received', {
+            service: 'suggest-people',
+            query: queryParams,
+            headers: req.headers
+        });
+
+        const response = await axios.get(funnelbackUrl, {
+            params: queryParams,
+            headers: {
+                'Accept': 'application/json',
+                'X-Forwarded-For': userIp
+            }
+        });
+
+        // Extract and format results
+        const results = response.data?.response?.resultPacket?.results || [];
+        
+        // Clean and format the results
+        const formattedResults = results.map(result => ({
+            ...result,
+            title: cleanTitle(result.title),
+            profileUrl: result.liveUrl || '',
+            college: result.listMetadata?.college?.[0] || '',
+            image: result.listMetadata?.image?.[0] || '',
+            affiliation: result.listMetadata?.affiliation?.[0] || '',
+            department: result.listMetadata?.peopleDepartment?.[0] || '',
+            position: result.listMetadata?.peoplePosition?.[0] || ''
+        }));
+
+        // Log the successful response
+        logEvent('info', 'Response received', {
+            service: 'suggest-people',
+            query: queryParams,
+            status: response.status,
+            processingTime: `${Date.now() - startTime}ms`,
+            responseContent: JSON.stringify(formattedResults).substring(0, 500) + '...',
+            headers: req.headers,
+        });
+
+        // Set JSON content type header and send response
+        res.setHeader('Content-Type', 'application/json');
+        res.send(formattedResults);
+
+    } catch (error) {
+        // Log any errors that occur
+        logEvent('error', 'Handler error', {
+            service: 'suggest-people',
+            query: req.query,
+            error: error.message,
+            status: error.response?.status || 500,
+            processingTime: `${Date.now() - startTime}ms`,
+            headers: req.headers
+        });
+        
+        // Send error response
+        res.status(error.response?.status || 500).json({
+            error: 'Error fetching results',
+            message: error.message
+        });
+    }
+}
+
+module.exports = handler;
+
+
+
+
+
+
+
+
+/**
+ * @fileoverview Suggestion Handler for Funnelback Search Integration (People)
+ * 
+ * Handles autocomplete suggestion requests for faculty and staff searches with
+ * structured logging for Vercel serverless environment. Returns detailed information
+ * including college and department affiliations.
+ * 
+ * Features:
+ * - CORS handling for Seattle University domain
+ * - Structured JSON logging for Vercel
+ * - Request/Response tracking with detailed headers
+ * - Enhanced response format with department/college info
+ * - Comprehensive error handling with detailed logging
+ * 
+ * @author Victor Chimenti
+ * @version 1.4.0
+ * @license MIT
+ */
+
+const axios = require('axios');
+const os = require('os');
+
+// Keeping your existing logEvent function as is
+function logEvent(level, message, data = {}) {
+    // ... [Previous logEvent implementation remains unchanged]
 }
 
 /**
@@ -118,7 +271,6 @@ async function handler(req, res) {
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
     const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-    
     // CORS handling for Seattle University domain
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -130,12 +282,13 @@ async function handler(req, res) {
     }
 
     try {
-        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
+        const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
         const queryParams = { 
-            ...req.query, 
-            collection: 'seattleu~ds-staff',
+            form: 'partial',
             profile: '_default',
-            form: 'simple'
+            query: req.query.query,
+            'f.Tabs|seattleu|ds-staff': 'Faculty & Staff',
+            collection: 'seattleu~sp-search'
         };
 
         // Log the request
@@ -145,11 +298,10 @@ async function handler(req, res) {
             headers: req.headers
         });
 
-        // Just pass through the response text
         const response = await axios.get(funnelbackUrl, {
             params: queryParams,
             headers: {
-                'Accept': 'text/html',
+                'Accept': 'application/json',
                 'X-Forwarded-For': userIp
             }
         });
@@ -160,12 +312,32 @@ async function handler(req, res) {
             query: queryParams,
             status: response.status,
             processingTime: `${Date.now() - startTime}ms`,
-            responseContent: response.data,
+            responseContent: JSON.stringify(response.data).substring(0, 500) + '...',
             headers: req.headers,
         });
 
+        // Extract and format results
+        const results = response.data?.response?.resultPacket?.results || [];
+        
+        // Clean and format the results
+        const formattedResults = results.map(result => {
+            // Get the first part of the pipe-separated title and clean HTML tags
+            const fullTitle = result.title || '';
+            const cleanTitle = fullTitle
+                .split('|')[0]                          // Get first part before pipe
+                .replace(/<\/?[^>]+(>|$)/g, '')        // Remove HTML tags
+                .trim();                               // Remove extra whitespace
+            
+            return {
+                ...result,
+                title: cleanTitle
+            };
+        });
+        
+        // Set JSON content type header
+        res.setHeader('Content-Type', 'application/json');
+        res.send(formattedResults);
 
-        res.send(response.data);
     } catch (error) {
         logEvent('error', 'Handler error', {
             service: 'suggest-people',
@@ -176,7 +348,10 @@ async function handler(req, res) {
             headers: req.headers
         });
         
-        res.status(500).send('Error fetching results');
+        res.status(error.response?.status || 500).json({
+            error: 'Error fetching results',
+            message: error.message
+        });
     }
 }
 
