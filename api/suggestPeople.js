@@ -14,7 +14,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 2.0.1
+ * @version 2.0.2
  * @license MIT
  */
 
@@ -79,7 +79,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '2.0.1',
+        logVersion: '2.0.2',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -155,15 +155,19 @@ async function handler(req, res) {
             query: req.query.query,
             'f.Tabs|seattleu|ds-staff': 'Faculty & Staff',
             collection: 'seattleu~sp-search',
-            num_ranks: 5
+            numranks: 5
         };
 
-        // Log the request
-        logEvent('info', 'Request received', {
+        // Log detailed request info
+        logEvent('debug', 'Outgoing request details', {
             service: 'suggest-people',
+            url: `${funnelbackUrl}?${new URLSearchParams(queryParams)}`,
             query: queryParams,
             headers: req.headers
         });
+
+        // Log the actual URL we're hitting
+        console.log('Funnelback URL:', `${funnelbackUrl}?${new URLSearchParams(queryParams)}`);
 
         const response = await axios.get(funnelbackUrl, {
             params: queryParams,
@@ -213,11 +217,16 @@ async function handler(req, res) {
         res.send(formattedResults);
 
     } catch (error) {
-        // Log any errors that occur
+        // Log detailed error information
         logEvent('error', 'Handler error', {
             service: 'suggest-people',
             query: req.query,
-            error: error.message,
+            error: {
+                message: error.message,
+                stack: error.stack,
+                response: error.response?.data,
+                status: error.response?.status
+            },
             status: error.response?.status || 500,
             processingTime: `${Date.now() - startTime}ms`,
             headers: req.headers
@@ -226,7 +235,8 @@ async function handler(req, res) {
         // Send error response
         res.status(error.response?.status || 500).json({
             error: 'Error fetching results',
-            message: error.message
+            message: error.message,
+            details: error.response?.data
         });
     }
 }
