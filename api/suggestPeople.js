@@ -14,7 +14,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 2.0.2
+ * @version 2.1.0
  * @license MIT
  */
 
@@ -79,7 +79,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '2.0.2',
+        logVersion: '2.1.0',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -137,6 +137,15 @@ async function handler(req, res) {
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
     const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
+    // Keep this for logging
+    const params = new URLSearchParams();
+    params.append('form', 'partial');
+    params.append('profile', '_default');
+    params.append('query', req.query.query);
+    params.append('f.Tabs|seattleu|Eds-staff', 'Faculty & Staff');
+    params.append('collection', 'seattleu~sp-search');
+    params.append('num_ranks', '5');
+
     // CORS handling for Seattle University domain
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -149,14 +158,16 @@ async function handler(req, res) {
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
-        const queryParams = { 
-            form: 'partial',
-            profile: '_default',
-            query: req.query.query,
-            'f.Tabs|seattleu|ds-staff': 'Faculty & Staff',
-            collection: 'seattleu~sp-search',
-            num_ranks: 5
-        };
+        const queryString = [
+            'form=partial',
+            'profile=_default',
+            `query=${encodeURIComponent(req.query.query)}`,
+            'f.Tabs%7Cseattleu%7CEds-staff=Faculty+%26+Staff',
+            'collection=seattleu~sp-search',
+            'num_ranks=5'
+        ].join('&');
+
+        const url = `${funnelbackUrl}?${queryString}`;
 
         // Log detailed request info
         logEvent('debug', 'Outgoing request details', {
@@ -169,8 +180,7 @@ async function handler(req, res) {
         // Log the actual URL we're hitting
         console.log('Funnelback URL:', `${funnelbackUrl}?${new URLSearchParams(queryParams)}`);
 
-        const response = await axios.get(funnelbackUrl, {
-            params: queryParams,
+        const response = await axios.get(url, {
             headers: {
                 'Accept': 'application/json',
                 'X-Forwarded-For': userIp
