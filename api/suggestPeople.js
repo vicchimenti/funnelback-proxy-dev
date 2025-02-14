@@ -14,7 +14,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 2.1.0
+ * @version 2.1.1
  * @license MIT
  */
 
@@ -79,7 +79,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '2.1.0',
+        logVersion: '2.1.1',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -138,7 +138,7 @@ async function handler(req, res) {
     const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
     // Keep this for logging
-    const params = new URLSearchParams();
+    const queryParams = new URLSearchParams();
     params.append('form', 'partial');
     params.append('profile', '_default');
     params.append('query', req.query.query);
@@ -178,7 +178,7 @@ async function handler(req, res) {
         });
 
         // Log the actual URL we're hitting
-        console.log('Funnelback URL:', `${funnelbackUrl}?${new URLSearchParams(queryParams)}`);
+        console.log('Funnelback URL:', `${url}`);
 
         const response = await axios.get(url, {
             headers: {
