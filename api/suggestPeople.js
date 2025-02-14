@@ -14,7 +14,7 @@
  * - Comprehensive error handling with detailed logging
  * 
  * @author Victor Chimenti
- * @version 2.1.1
+ * @version 2.1.2
  * @license MIT
  */
 
@@ -27,12 +27,6 @@ const os = require('os');
  * @param {string} level - Log level ('info', 'warn', 'error')
  * @param {string} message - Main log message/action
  * @param {Object} data - Additional data to include in log
- * @param {Object} [data.query] - Query parameters
- * @param {Object} [data.headers] - Request headers
- * @param {number} [data.status] - HTTP status code
- * @param {string} [data.processingTime] - Request processing duration
- * @param {string} [data.responseContent] - Preview of response content
- * @param {Object} [data.error] - Error details if applicable
  */
 function logEvent(level, message, data = {}) {
     const serverInfo = {
@@ -79,16 +73,12 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '2.1.1',
+        logVersion: '2.1.2',
         timestamp: new Date().toISOString(),
         event: {
             level,
             action: message,
-            query: data.query ? {
-                searchTerm: data.query.query || '',
-                collection: data.query.collection,
-                profile: data.query.profile
-            } : null,
+            query: data.query || null,
             response: data.status ? {
                 status: data.status,
                 processingTime: data.processingTime,
@@ -108,43 +98,10 @@ function logEvent(level, message, data = {}) {
     console.log(JSON.stringify(logEntry));
 }
 
-/**
- * Cleans a title string by removing HTML tags and taking only the first part before any pipe character
- * 
- * @param {string} title - The raw title string to clean
- * @returns {string} The cleaned title
- */
-function cleanTitle(title = '') {
-    return title
-        .split('|')[0]                    // Get first part before pipe
-        .replace(/<\/?[^>]+(>|$)/g, '')   // Remove HTML tags
-        .trim();                          // Remove extra whitespace
-}
-
-/**
- * Handler for suggestion requests to Funnelback search service
- * 
- * @param {Object} req - Express request object
- * @param {Object} req.query - Query parameters from the request
- * @param {string} [req.query.query] - Search query string
- * @param {Object} req.headers - Request headers
- * @param {string} req.method - HTTP method of the request
- * @param {Object} res - Express response object
- * @returns {Promise<void>}
- */
 async function handler(req, res) {
     const startTime = Date.now();
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
     const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
-    // Keep this for logging
-    const queryParams = new URLSearchParams();
-    params.append('form', 'partial');
-    params.append('profile', '_default');
-    params.append('query', req.query.query);
-    params.append('f.Tabs|seattleu|Eds-staff', 'Faculty & Staff');
-    params.append('collection', 'seattleu~sp-search');
-    params.append('num_ranks', '5');
 
     // CORS handling for Seattle University domain
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
@@ -158,6 +115,17 @@ async function handler(req, res) {
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
+        
+        // Keep params for logging
+        const params = new URLSearchParams();
+        params.append('form', 'partial');
+        params.append('profile', '_default');
+        params.append('query', req.query.query);
+        params.append('f.Tabs|seattleu|Eds-staff', 'Faculty & Staff');
+        params.append('collection', 'seattleu~sp-search');
+        params.append('num_ranks', '5');
+
+        // Use correctly encoded queryString for request
         const queryString = [
             'form=partial',
             'profile=_default',
@@ -169,16 +137,13 @@ async function handler(req, res) {
 
         const url = `${funnelbackUrl}?${queryString}`;
 
-        // Log detailed request info
+        // Log request details
         logEvent('debug', 'Outgoing request details', {
             service: 'suggest-people',
-            url: `${funnelbackUrl}?${new URLSearchParams(queryParams)}`,
-            query: queryParams,
+            url: url,
+            query: Object.fromEntries(params),
             headers: req.headers
         });
-
-        // Log the actual URL we're hitting
-        console.log('Funnelback URL:', `${url}`);
 
         const response = await axios.get(url, {
             headers: {
@@ -187,42 +152,18 @@ async function handler(req, res) {
             }
         });
 
-        // Log raw response for debugging
-        logEvent('debug', 'Raw Funnelback response', {
-            service: 'suggest-people',
-            query: queryParams,
-            status: response.status,
-            processingTime: `${Date.now() - startTime}ms`,
-            responseContent: JSON.stringify(response.data),
-            headers: req.headers,
-        });
-
-        // Extract and format results
-        const results = response.data?.response?.resultPacket?.results || [];
-        
-        // Clean and format the results
-        const formattedResults = results.map(result => ({
-            ...result,
-            title: cleanTitle(result.title),
-            profileUrl: result.liveUrl || '',
-            college: result.listMetadata?.college?.[0] || '',
-            image: result.listMetadata?.image?.[0] || '',
-            affiliation: result.listMetadata?.affiliation?.[0] || '',
-            department: result.listMetadata?.peopleDepartment?.[0] || '',
-            position: result.listMetadata?.peoplePosition?.[0] || ''
-        }));
-
         // Log the successful response
         logEvent('info', 'Response received', {
             service: 'suggest-people',
-            query: queryParams,
+            query: Object.fromEntries(params),
             status: response.status,
             processingTime: `${Date.now() - startTime}ms`,
-            responseContent: JSON.stringify(formattedResults).substring(0, 500) + '...',
+            responseContent: JSON.stringify(response.data).substring(0, 500) + '...',
             headers: req.headers,
         });
 
-        // Set JSON content type header and send response
+        // Format and send response
+        const formattedResults = response.data?.response?.resultPacket?.results || [];
         res.setHeader('Content-Type', 'application/json');
         res.send(formattedResults);
 
@@ -242,7 +183,6 @@ async function handler(req, res) {
             headers: req.headers
         });
         
-        // Send error response
         res.status(error.response?.status || 500).json({
             error: 'Error fetching results',
             message: error.message,
