@@ -204,7 +204,6 @@ async function handler(req, res) {
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
-
         
         // Log the request
         logEvent('info', 'Programs search request received', {
