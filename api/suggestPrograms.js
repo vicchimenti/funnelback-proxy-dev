@@ -186,29 +186,44 @@ async function handler(req, res) {
             throw new Error('Invalid response format from Funnelback');
         }
 
-        // Format response for frontend consumption
+        console.log('Raw Funnelback Response:', {
+            hasResults: !!response.data.results,
+            resultsLength: response.data.results?.length,
+            firstResult: response.data.results?.[0]
+        });
+        
+        // Add null checks in formatted response
         const formattedResponse = {
             metadata: {
-                totalResults: response.data.totalMatches,
-                queryTime: response.data.queryTime,
+                totalResults: response.data.totalMatches || 0,
+                queryTime: response.data.queryTime || 0,
                 searchTerm: query.query || ''
             },
-            programs: response.data.results.map(result => ({
-                id: result.rank,
-                title: cleanProgramTitle(result.title),
-                url: result.liveUrl,
-                details: {
-                    type: result.listMetadata?.programCredentialType?.[0] || null,
-                    school: result.listMetadata?.provider?.[0] || null,
-                    credits: result.listMetadata?.credits?.[0] || null,
-                    area: result.listMetadata?.areaOfStudy?.[0] || null,
-                    level: result.listMetadata?.category?.[0] || null,
-                    mode: result.listMetadata?.programMode?.[0] || null
-                },
-                image: result.listMetadata?.image?.[0] || null,
-                description: result.listMetadata?.c?.[0] || null
-            }))
+            programs: Array.isArray(response.data.results) 
+                ? response.data.results.map(result => ({
+                    id: result.rank || 0,
+                    title: cleanProgramTitle(result.title || ''),
+                    url: result.liveUrl || '',
+                    details: {
+                        type: result.listMetadata?.programCredentialType?.[0] || null,
+                        school: result.listMetadata?.provider?.[0] || null,
+                        credits: result.listMetadata?.credits?.[0] || null,
+                        area: result.listMetadata?.areaOfStudy?.[0] || null,
+                        level: result.listMetadata?.category?.[0] || null,
+                        mode: result.listMetadata?.programMode?.[0] || null
+                    },
+                    image: result.listMetadata?.image?.[0] || null,
+                    description: result.listMetadata?.c?.[0] || null
+                }))
+                : []
         };
+        
+        // Add debug logging for formatted response
+        console.log('Formatted Response:', {
+            hasPrograms: !!formattedResponse.programs,
+            programsLength: formattedResponse.programs.length,
+            firstProgram: formattedResponse.programs[0]
+        });
 
         // Log the successful response
         logEvent('info', 'Programs search completed', {
