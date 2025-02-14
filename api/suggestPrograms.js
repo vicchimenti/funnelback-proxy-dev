@@ -17,7 +17,7 @@
  * - Comprehensive error handling
  * 
  * @author Victor Chimenti
- * @version 1.5.2
+ * @version 1.5.3
  * @license MIT
  */
 
@@ -65,9 +65,10 @@ function logEvent(level, message, data = {}) {
     } : null;
 
     const logEntry = {
-        timestamp: new Date().toISOString(),
         service: 'suggest-programs',
-        version: '1.5.1',
+        hostname: os.hostname(),
+        timestamp: new Date().toISOString(),
+        version: '1.5.3',
         level,
         message,
         userIp: data.headers?.['x-forwarded-for'] || 
@@ -148,7 +149,8 @@ async function handler(req, res) {
         ...req.query, 
         collection: 'seattleu~ds-programs',
         profile: '_default',
-        num_ranks: 5
+        num_ranks: 5,
+        form: 'partial'
     };
     
     // CORS headers
@@ -171,6 +173,9 @@ async function handler(req, res) {
             headers: req.headers
         });
 
+        // Log the actual URL we're hitting
+        console.log('Funnelback URL:', `${funnelbackUrl}?${new URLSearchParams(query)}`);
+
         // Make the request with explicit JSON headers
         const response = await axios.get(funnelbackUrl, {
             params: query,
@@ -179,6 +184,14 @@ async function handler(req, res) {
                 'Content-Type': 'application/json',
                 'X-Forwarded-For': userIp
             }
+        });
+
+        // Debug log for raw response
+        console.log('Raw Response:', {
+            status: response.status,
+            contentType: response.headers['content-type'],
+            hasResults: !!response.data.results,
+            resultsCount: response.data.results?.length
         });
 
         // Verify we received JSON response
