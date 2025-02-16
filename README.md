@@ -385,30 +385,54 @@ These tests will help ensure:
 
 ## Repository Usage
 
-This repository is connected directly to production systems and does not accept external contributions. However, developers are welcome to fork the repository for their own use:
+This repository is connected directly to production systems. Access is restricted to authorized collaborators only.
 
-1. Click the "Fork" button at the top right of the repository page
-2. Clone your forked repository:
+### For Collaborators
+
+Authorized collaborators must follow these guidelines when working with the repository:
+
+1. Clone the repository directly:
    ```bash
    git clone https://github.com/your-username/funnelback-proxy.git
    ```
-3. Create your own branch:
+
+2. Always create a new branch for changes:
    ```bash
-   git checkout -b your-feature
+   git checkout -b feature/description-of-change
    ```
 
-### Important Notes
+3. Commit standards:
+   ```bash
+   # Format: type(scope): description
+   git commit -m "feat(suggestPeople): add new metadata field for department"
+   git commit -m "fix(server): correct CORS header handling"
+   ```
 
-- This is a production repository - no pull requests will be accepted
-- The main branch deploys directly to production
-- For questions or issues, please contact the repository owner
-- Keep your fork updated by syncing with the upstream repository periodically
+4. Testing changes:
+   - Test all changes thoroughly in development environment
+   - Verify CORS functionality with seattleu.edu domain
+   - Check all error handling scenarios
+   - Validate logging output
+
+5. Deployment process:
+   - Merges to main branch automatically deploy to production
+   - All changes must be reviewed by at least one other collaborator
+   - Deploy during low-traffic periods when possible
+
+### Security Notes
+
+- Never commit sensitive data or credentials
+- Keep your access tokens secure
+- Report security concerns immediately to the repository owner
+- Regular security audits are conducted on all commits
 
 ### Repository Access
 
-- Read access: Public
-- Write access: Restricted to authorized personnel only
+- Read/Write access: Restricted to authorized collaborators only
 - Deploy access: Restricted to production systems
+- Branch protection: Enabled on main branch
+
+For questions or access requests, contact the repository owner.
 
 ## Versioning
 
