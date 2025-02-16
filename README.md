@@ -383,29 +383,32 @@ These tests will help ensure:
 - CORS compliance
 - Header management
 
-## Contributing
+## Repository Usage
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+This repository is connected directly to production systems and does not accept external contributions. However, developers are welcome to fork the repository for their own use:
 
-### Coding Standards
+1. Click the "Fork" button at the top right of the repository page
+2. Clone your forked repository:
+   ```bash
+   git clone https://github.com/your-username/funnelback-proxy.git
+   ```
+3. Create your own branch:
+   ```bash
+   git checkout -b your-feature
+   ```
 
-- Follow the existing code style
-- Maintain consistent error handling patterns
-- Add appropriate logging
-- Update documentation as needed
-- Include tests for new features
+### Important Notes
 
-### Pull Request Process
+- This is a production repository - no pull requests will be accepted
+- The main branch deploys directly to production
+- For questions or issues, please contact the repository owner
+- Keep your fork updated by syncing with the upstream repository periodically
 
-1. Update the README.md with details of changes if applicable
-2. Update the version numbers in package.json following [SemVer](http://semver.org/)
-3. Ensure all tests pass and code meets linting standards
-4. Get approval from at least one other developer
-5. Squash commits before merging
+### Repository Access
+
+- Read access: Public
+- Write access: Restricted to authorized personnel only
+- Deploy access: Restricted to production systems
 
 ## Versioning
 
