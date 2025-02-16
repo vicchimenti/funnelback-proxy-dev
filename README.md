@@ -251,23 +251,137 @@ npm run lint
 npm run lint:fix
 ```
 
-## Testing
+## Recommended Testing
+
+### Testing Setup
+To implement testing for this API, we recommend setting up:
 
 ```bash
-# Run all tests
-npm test
+# Install testing dependencies
+npm install --save-dev jest supertest nock
 
-# Run tests with coverage
-npm run test:coverage
-
-# Run tests in watch mode
-npm run test:watch
+# Add to package.json scripts
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  }
+}
 ```
 
-The test suite includes:
-- Unit tests for individual handlers
-- Integration tests for API endpoints
-- Load tests for performance verification
+### Suggested Test Structure
+
+```
+tests/
+├── unit/
+│   ├── handlers/
+│   │   ├── suggestPeople.test.js
+│   │   ├── suggestPrograms.test.js
+│   │   └── suggest.test.js
+│   └── utils/
+│       └── logEvent.test.js
+├── integration/
+│   └── endpoints.test.js
+└── mocks/
+    └── funnelbackResponses.js
+```
+
+### Key Areas to Test
+
+1. **Handler Functions**
+   ```javascript
+   // Example test for suggestPeople.js
+   describe('People Suggestion Handler', () => {
+     test('should clean and format personnel data', () => {
+       // Test cleanTitle function
+     });
+
+     test('should handle missing metadata fields', () => {
+       // Test null/undefined handling
+     });
+
+     test('should properly enrich suggestions', () => {
+       // Test data enrichment
+     });
+   });
+   ```
+
+2. **Error Handling**
+   ```javascript
+   // Example error handling test
+   describe('Error Handling', () => {
+     test('should handle Funnelback API errors gracefully', () => {
+       // Mock failed API response
+     });
+
+     test('should return appropriate status codes', () => {
+       // Test various error scenarios
+     });
+   });
+   ```
+
+3. **CORS and Headers**
+   ```javascript
+   // Example CORS test
+   describe('CORS Handling', () => {
+     test('should set correct CORS headers', () => {
+       // Verify headers for seattleu.edu
+     });
+   });
+   ```
+
+4. **Request Validation**
+   ```javascript
+   // Example validation test
+   describe('Request Validation', () => {
+     test('should validate required parameters', () => {
+       // Test parameter validation
+     });
+   });
+   ```
+
+### Mocking External Services
+
+```javascript
+// Example using nock to mock Funnelback API
+const nock = require('nock');
+
+beforeAll(() => {
+  nock('https://dxp-us-search.funnelback.squiz.cloud')
+    .get('/s/search.json')
+    .query(true)
+    .reply(200, {
+      // Mock response data
+    });
+});
+```
+
+### Performance Testing
+
+Consider implementing load tests using Artillery or k6:
+
+```javascript
+// k6 example script
+import http from 'k6/http';
+
+export default function() {
+  http.get('http://localhost:3000/proxy/suggestPeople?query=test');
+}
+
+export const options = {
+  vus: 10,
+  duration: '30s',
+};
+```
+
+These tests will help ensure:
+- Correct data transformation
+- Proper error handling
+- API reliability
+- Performance under load
+- CORS compliance
+- Header management
 
 ## Contributing
 
