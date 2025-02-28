@@ -444,4 +444,4 @@ MIT License - See LICENSE file for details
 
 ## Author
 
-Vic Chimenti
+Victor Chimenti
