@@ -7,6 +7,16 @@
         { "src": "/proxy/funnelback/spelling", "dest": "/api/spelling.js" },
         { "src": "/proxy/funnelback/suggest", "dest": "/api/suggest.js" },
         { "src": "/proxy/suggestPeople", "dest": "/api/suggestPeople.js" },
-        { "src": "/proxy/suggestPrograms", "dest": "/api/suggestPrograms.js" }
-    ]
+        { "src": "/proxy/suggestPrograms", "dest": "/api/suggestPrograms.js" },
+
+        { "src": "/api/analytics/summary", "dest": "/dashboard/api.js" },
+        { "src": "/api/analytics/trends", "dest": "/dashboard/api.js" },
+        { "src": "/api/analytics/handlers", "dest": "/dashboard/api.js" },
+        { "src": "/api/analytics/zero-results", "dest": "/dashboard/api.js" },
+        { "src": "/api/analytics/top-queries", "dest": "/dashboard/api.js" },
+        { "src": "/api/analytics/locations", "dest": "/dashboard/api.js" },
+        { "src": "/api/analytics/export", "dest": "/dashboard/api.js" },
+        
+        { "src": "/dashboard", "dest": "/dashboard/frontend/build/index.html" },
+        { "src": "/dashboard/(.*)", "dest": "/dashboard/frontend/build/$1" }    ]
 }
