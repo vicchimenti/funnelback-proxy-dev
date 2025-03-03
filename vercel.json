@@ -17,11 +17,11 @@
         { "src": "/api/analytics/locations", "dest": "/dashboard/api.js" },
         { "src": "/api/analytics/export", "dest": "/dashboard/api.js" },
         
-        { "src": "/dashboard", "dest": "/dashboard/frontend/public/index.html" },
-        { "src": "/dashboard/(.*)", "dest": "/dashboard/frontend/public/$1" },
-        { "src": "/static/(.*)", "dest": "/dashboard/frontend/public/static/$1" },
-        { "src": "/dashboard/static/(.*)", "dest": "/dashboard/frontend/public/static/$1" },
-        { "src": "/dashboard/favicon.ico", "dest": "/dashboard/frontend/public/favicon.ico" },
-        { "src": "/dashboard/manifest.json", "dest": "/dashboard/frontend/public/manifest.json" }
+        { "src": "/dashboard", "dest": "/dashboard/frontend/build/index.html" },
+        { "src": "/dashboard/(.*)", "dest": "/dashboard/frontend/build/$1" },
+        { "src": "/static/(.*)", "dest": "/dashboard/frontend/build/static/$1" },
+        { "src": "/dashboard/static/(.*)", "dest": "/dashboard/frontend/build/static/$1" },
+        { "src": "/dashboard/favicon.ico", "dest": "/dashboard/frontend/build/favicon.ico" },
+        { "src": "/dashboard/manifest.json", "dest": "/dashboard/frontend/build/manifest.json" }
     ]
 }
