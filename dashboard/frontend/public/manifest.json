@@ -1,6 +1,6 @@
 {
-  "short_name": "Analytics Dashboard",
-  "name": "Funnelback Query Analytics Dashboard",
+  "short_name": "Analytics",
+  "name": "Funnelback Query Analytics",
   "icons": [
     {
       "src": "favicon.ico",
