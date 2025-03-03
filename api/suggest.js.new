@@ -1,22 +1,22 @@
 /**
- * @fileoverview Suggestion Handler for Funnelback Search Integration
- * 
- * Handles autocomplete suggestion requests for the Funnelback integration.
- * Provides real-time search suggestions as users type, with structured logging
- * for Vercel serverless environment, now enhanced with query analytics tracking.
- * 
- * Features:
- * - CORS handling for Seattle University domain
- * - Structured JSON logging for Vercel
- * - Request/Response tracking with detailed headers
- * - Query parameter tracking
- * - Comprehensive error handling with detailed logging
- * - Query analytics integration
- * 
- * @author Victor Chimenti
- * @version 1.3.1
- * @license MIT
- */
+* @fileoverview Suggestion Handler for Funnelback Search Integration
+* 
+* Handles autocomplete suggestion requests for the Funnelback integration.
+* Provides real-time search suggestions as users type, with structured logging
+* for Vercel serverless environment.
+* 
+* Features:
+* - CORS handling for Seattle University domain
+* - Structured JSON logging for Vercel
+* - Request/Response tracking with detailed headers
+* - Query parameter tracking
+* - Comprehensive error handling with detailed logging
+* - Query analytics integration
+* 
+* @author Victor Chimenti
+* @version 1.3.0
+* @license MIT
+*/
 
 const axios = require('axios');
 const os = require('os');
@@ -30,17 +30,17 @@ if (process.env.MONGODB_URI) {
 }
 
 /**
- * Creates a standardized log entry for Vercel environment
- * 
- * @param {string} level - Log level ('info', 'warn', 'error')
- * @param {string} message - Main log message/action
- * @param {Object} data - Additional data to include in log
- * @param {Object} [data.query] - Query parameters
- * @param {Object} [data.headers] - Request headers
- * @param {number} [data.status] - HTTP status code
- * @param {string} [data.processingTime] - Request processing duration
- * @param {number} [data.suggestionsCount] - Number of suggestions returned
- */
+* Creates a standardized log entry for Vercel environment
+* 
+* @param {string} level - Log level ('info', 'warn', 'error')
+* @param {string} message - Main log message/action
+* @param {Object} data - Additional data to include in log
+* @param {Object} [data.query] - Query parameters
+* @param {Object} [data.headers] - Request headers
+* @param {number} [data.status] - HTTP status code
+* @param {string} [data.processingTime] - Request processing duration
+* @param {number} [data.suggestionsCount] - Number of suggestions returned
+*/
 function logEvent(level, message, data = {}) {
    const serverInfo = {
        hostname: os.hostname(),
@@ -113,12 +113,12 @@ function logEvent(level, message, data = {}) {
 }
 
 /**
- * Enriches suggestions with metadata based on content and tab parameters
- * 
- * @param {Array<string>} suggestions - Raw suggestions from Funnelback
- * @param {Object} query - Query parameters including tab information
- * @returns {Array<Object>} Enriched suggestions with metadata
- */
+* Enriches suggestions with metadata based on content and tab parameters
+* 
+* @param {Array<string>} suggestions - Raw suggestions from Funnelback
+* @param {Object} query - Query parameters including tab information
+* @returns {Array<Object>} Enriched suggestions with metadata
+*/
 function enrichSuggestions(suggestions, query) {
     // Log incoming request parameters
     console.log('Enrichment Request Parameters:', {
@@ -172,17 +172,16 @@ function enrichSuggestions(suggestions, query) {
 
     return enrichedSuggestions;
 }
-
 /**
- * Handler for suggestion requests to Funnelback search service
- * 
- * @param {Object} req - Express request object
- * @param {Object} req.query - Query parameters from the request
- * @param {Object} req.headers - Request headers
- * @param {string} req.method - HTTP method of the request
- * @param {Object} res - Express response object
- * @returns {Promise<void>}
- */
+* Handler for suggestion requests to Funnelback search service
+* 
+* @param {Object} req - Express request object
+* @param {Object} req.query - Query parameters from the request
+* @param {Object} req.headers - Request headers
+* @param {string} req.method - HTTP method of the request
+* @param {Object} res - Express response object
+* @returns {Promise<void>}
+*/
 async function handler(req, res) {
    const startTime = Date.now();
    const requestId = req.headers['x-vercel-id'] || Date.now().toString();
