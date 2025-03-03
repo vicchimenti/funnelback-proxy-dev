@@ -14,20 +14,15 @@
 * - Query analytics integration
 * 
 * @author Victor Chimenti
-* @version 2.0.1
+* @version 2.1.0
 * @license MIT
 */
 
 const axios = require('axios');
 const os = require('os');
-const { connectToDatabase } = require('../lib/queryAnalytics');
-const { trackQuery } = require('../lib/queryMiddleware');
+const { recordQuery } = require('../lib/queryAnalytics');
 
-// Initialize database connection
-if (process.env.MONGODB_URI) {
-  connectToDatabase(process.env.MONGODB_URI)
-    .catch(err => console.error('Failed to connect to MongoDB:', err));
-}
+// Don't initialize MongoDB connection here - we'll handle that in the recordQuery function
 
 /**
 * Creates a standardized log entry for Vercel environment
@@ -42,6 +37,8 @@ if (process.env.MONGODB_URI) {
 * @param {number} [data.suggestionsCount] - Number of suggestions returned
 */
 function logEvent(level, message, data = {}) {
+   // [Your existing logEvent function]
+   // No changes needed here
    const serverInfo = {
        hostname: os.hostname(),
        platform: os.platform(),
@@ -172,8 +169,10 @@ function enrichSuggestions(suggestions, query) {
 
     return enrichedSuggestions;
 }
+
 /**
 * Handler for suggestion requests to Funnelback search service
+* Now includes analytics tracking
 * 
 * @param {Object} req - Express request object
 * @param {Object} req.query - Query parameters from the request
@@ -221,15 +220,57 @@ async function handler(req, res) {
 
     // Enrich suggestions with metadata
     const enrichedResponse = enrichSuggestions(response.data, req.query);
+    
+    // Process time for this request
+    const processingTime = Date.now() - startTime;
 
     logEvent('info', 'Response enriched', {
         status: response.status,
-        processingTime: `${Date.now() - startTime}ms`,
+        processingTime: `${processingTime}ms`,
         suggestionsCount: enrichedResponse.length || 0,
         query: req.query,
         headers: req.headers
     });
 
+    // Record query data for analytics (don't await to avoid blocking)
+    try {
+      if (process.env.MONGODB_URI) {
+        // Create analytics data
+        const analyticsData = {
+          handler: 'suggest',
+          query: req.query.query || '',
+          collection: req.query.collection || 'seattleu~sp-search',
+          userIp: userIp,
+          userAgent: req.headers['user-agent'],
+          referer: req.headers.referer,
+          city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+          region: req.headers['x-vercel-ip-country-region'],
+          country: req.headers['x-vercel-ip-country'],
+          timezone: req.headers['x-vercel-ip-timezone'],
+          latitude: req.headers['x-vercel-ip-latitude'],
+          longitude: req.headers['x-vercel-ip-longitude'],
+          responseTime: processingTime,
+          resultCount: enrichedResponse.length || 0,
+          isProgramTab: Boolean(req.query['f.Tabs|programMain']),
+          isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
+          tabs: []
+        };
+        
+        // Add tabs information
+        if (analyticsData.isProgramTab) analyticsData.tabs.push('program-main');
+        if (analyticsData.isStaffTab) analyticsData.tabs.push('Faculty & Staff');
+        
+        // Record the analytics
+        recordQuery(analyticsData).catch(err => {
+          console.error('Error recording analytics:', err);
+        });
+      }
+    } catch (analyticsError) {
+      // Log analytics error but don't fail the request
+      console.error('Analytics error:', analyticsError);
+    }
+
+    // Send response to client
     res.json(enrichedResponse);
    } catch (error) {
        logEvent('error', 'Handler error', {
@@ -247,10 +288,5 @@ async function handler(req, res) {
    }
 }
 
-// Add query tracking middleware
-const handlerWithTracking = [
-  trackQuery({ handler: 'suggest' }),
-  handler
-];
-
-module.exports = handlerWithTracking;
+// Export a single function as required by Vercel
+module.exports = handler;
