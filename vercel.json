@@ -17,10 +17,6 @@
         { "src": "/api/analytics/locations", "dest": "/dashboard/api.js" },
         { "src": "/api/analytics/export", "dest": "/dashboard/api.js" },
         
-        { "src": "/dashboard", "dest": "/dashboard/frontend/build/index.html" },
-        { "src": "/dashboard/static/js/(.*)", "headers": { "content-type": "application/javascript" }, "dest": "/dashboard/frontend/build/static/js/$1" },
-        { "src": "/dashboard/static/css/(.*)", "headers": { "content-type": "text/css" }, "dest": "/dashboard/frontend/build/static/css/$1" },
-        { "src": "/dashboard/static/media/(.*)", "dest": "/dashboard/frontend/build/static/media/$1" },
-        { "src": "/dashboard/(.+)", "dest": "/dashboard/frontend/build/$1" }
+        { "src": "/dashboard(.*)", "dest": "/dashboard/frontend/build/index.html" }
     ]
 }
