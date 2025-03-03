@@ -1,5 +1,5 @@
 {
-    "version": 2,
+    "version": 3,
     "routes": [
         { "src": "/proxy/funnelback", "dest": "/api/server.js" },
         { "src": "/proxy/funnelback/search", "dest": "/api/search.js" },
@@ -17,11 +17,6 @@
         { "src": "/api/analytics/locations", "dest": "/dashboard/api.js" },
         { "src": "/api/analytics/export", "dest": "/dashboard/api.js" },
         
-        { "src": "/dashboard", "dest": "/dashboard/frontend/build/index.html" },
-        { "src": "/dashboard/(.*)", "dest": "/dashboard/frontend/build/$1" },
-        { "src": "/static/(.*)", "dest": "/dashboard/frontend/build/static/$1" },
-        { "src": "/dashboard/static/(.*)", "dest": "/dashboard/frontend/build/static/$1" },
-        { "src": "/dashboard/favicon.ico", "dest": "/dashboard/frontend/build/favicon.ico" },
-        { "src": "/dashboard/manifest.json", "dest": "/dashboard/frontend/build/manifest.json" }
+        { "src": "/dashboard(.*)", "dest": "/dashboard/frontend/build/index.html" }
     ]
 }
