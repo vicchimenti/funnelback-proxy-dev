@@ -11,14 +11,23 @@
 * - Request/Response tracking with detailed headers
 * - Query parameter tracking
 * - Comprehensive error handling with detailed logging
+* - Query analytics integration
 * 
 * @author Victor Chimenti
-* @version 1.2.3
+* @version 2.0.1
 * @license MIT
 */
 
 const axios = require('axios');
 const os = require('os');
+const { connectToDatabase } = require('../lib/queryAnalytics');
+const { trackQuery } = require('../lib/queryMiddleware');
+
+// Initialize database connection
+if (process.env.MONGODB_URI) {
+  connectToDatabase(process.env.MONGODB_URI)
+    .catch(err => console.error('Failed to connect to MongoDB:', err));
+}
 
 /**
 * Creates a standardized log entry for Vercel environment
@@ -238,4 +247,10 @@ async function handler(req, res) {
    }
 }
 
-module.exports = handler;
+// Add query tracking middleware
+const handlerWithTracking = [
+  trackQuery({ handler: 'suggest' }),
+  handler
+];
+
+module.exports = handlerWithTracking;
