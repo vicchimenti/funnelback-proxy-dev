@@ -14,7 +14,7 @@
 * - Query analytics integration
 * 
 * @author Victor Chimenti
-* @version 2.1.0
+* @version 2.1.1
 * @license MIT
 */
 
@@ -238,7 +238,7 @@ async function handler(req, res) {
         // Create analytics data
         const analyticsData = {
           handler: 'suggest',
-          query: req.query.query || '',
+          query: req.query.query || '[empty query]',  // Use a descriptive placeholder instead of empty string
           collection: req.query.collection || 'seattleu~sp-search',
           userIp: userIp,
           userAgent: req.headers['user-agent'],
