@@ -12,14 +12,16 @@
  * - Enhanced response format with rich metadata
  * - Title cleaning and formatting
  * - Comprehensive error handling with detailed logging
+ * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 2.2.3
+ * @version 3.0.1
  * @license MIT
  */
 
 const axios = require('axios');
 const os = require('os');
+const { recordQuery } = require('../lib/queryAnalytics');
 
 /**
  * Creates a standardized log entry for Vercel environment
@@ -73,7 +75,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '2.2.3',
+        logVersion: '3.0.1',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -133,7 +135,7 @@ async function handler(req, res) {
         const params = new URLSearchParams();
         params.append('form', 'partial');
         params.append('profile', '_default');
-        params.append('query', req.query.query);
+        params.append('query', req.query.query || '');
         params.append('f.Tabs|seattleu|Eds-staff', 'Faculty & Staff');
         params.append('collection', 'seattleu~sp-search');
         params.append('num_ranks', '5');
@@ -142,7 +144,7 @@ async function handler(req, res) {
         const queryString = [
             'form=partial',
             'profile=_default',
-            `query=${encodeURIComponent(req.query.query)}`,
+            `query=${encodeURIComponent(req.query.query || '')}`,
             'f.Tabs%7Cseattleu%7Eds-staff=Faculty+%26+Staff',
             'collection=seattleu~sp-search',
             'num_ranks=5'
@@ -172,15 +174,71 @@ async function handler(req, res) {
         console.log('DEBUG - Response data type:', response.data?.response?.resultPacket?.results ? 'Has results' : 'No results');
         console.log('DEBUG - Number of results:', response.data?.response?.resultPacket?.results?.length || 0);
 
+        // Get result count for analytics
+        const resultCount = response.data?.response?.resultPacket?.results?.length || 0;
+        const processingTime = Date.now() - startTime;
+
         // Log the successful response
         logEvent('info', 'Response received', {
             service: 'suggest-people',
             query: Object.fromEntries(params),
             status: response.status,
-            processingTime: `${Date.now() - startTime}ms`,
+            processingTime: `${processingTime}ms`,
             responseContent: JSON.stringify(response.data).substring(0, 500) + '...',
             headers: req.headers,
         });
+
+        // Record analytics data
+        try {
+            console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
+            
+            if (process.env.MONGODB_URI) {
+                console.log('Raw query parameters:', req.query);
+                
+                const analyticsData = {
+                    handler: 'suggestPeople',
+                    query: req.query.query || '[empty query]',
+                    collection: 'seattleu~sp-search',
+                    userIp: userIp,
+                    userAgent: req.headers['user-agent'],
+                    referer: req.headers.referer,
+                    city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+                    region: req.headers['x-vercel-ip-country-region'],
+                    country: req.headers['x-vercel-ip-country'],
+                    timezone: req.headers['x-vercel-ip-timezone'],
+                    latitude: req.headers['x-vercel-ip-latitude'],
+                    longitude: req.headers['x-vercel-ip-longitude'],
+                    responseTime: processingTime,
+                    resultCount: resultCount,
+                    isStaffTab: true,  // This is specifically for staff searches
+                    tabs: ['Faculty & Staff'],
+                    timestamp: new Date()
+                };
+                
+                // Log analytics data (excluding sensitive info)
+                const loggableData = { ...analyticsData };
+                delete loggableData.userIp;
+                console.log('Analytics data prepared for recording:', loggableData);
+                
+                // Record the analytics
+                try {
+                    const recordResult = await recordQuery(analyticsData);
+                    console.log('Analytics record result:', recordResult ? 'Saved' : 'Not saved');
+                    if (recordResult && recordResult._id) {
+                        console.log('Analytics record ID:', recordResult._id.toString());
+                    }
+                } catch (recordError) {
+                    console.error('Error recording analytics:', recordError.message);
+                    if (recordError.name === 'ValidationError') {
+                        console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
+                    }
+                }
+            } else {
+                console.log('No MongoDB URI defined, skipping analytics recording');
+            }
+        } catch (analyticsError) {
+            console.error('Analytics error:', analyticsError);
+        }
 
         // Format and send response
         const formattedResults = (response.data?.response?.resultPacket?.results || []).map(result => {
