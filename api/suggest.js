@@ -14,7 +14,7 @@
 * - Query analytics integration
 * 
 * @author Victor Chimenti
-* @version 2.1.1
+* @version 2.2.0
 * @license MIT
 */
 
@@ -232,43 +232,71 @@ async function handler(req, res) {
         headers: req.headers
     });
 
-    // Record query data for analytics (don't await to avoid blocking)
+    // Record query data for analytics with enhanced debugging
     try {
-      if (process.env.MONGODB_URI) {
+        // Log MongoDB URI presence (not the actual value for security)
+        console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
+        
+        if (process.env.MONGODB_URI) {
         // Create analytics data
         const analyticsData = {
-          handler: 'suggest',
-          query: req.query.query || '[empty query]',  // Use a descriptive placeholder instead of empty string
-          collection: req.query.collection || 'seattleu~sp-search',
-          userIp: userIp,
-          userAgent: req.headers['user-agent'],
-          referer: req.headers.referer,
-          city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-          region: req.headers['x-vercel-ip-country-region'],
-          country: req.headers['x-vercel-ip-country'],
-          timezone: req.headers['x-vercel-ip-timezone'],
-          latitude: req.headers['x-vercel-ip-latitude'],
-          longitude: req.headers['x-vercel-ip-longitude'],
-          responseTime: processingTime,
-          resultCount: enrichedResponse.length || 0,
-          isProgramTab: Boolean(req.query['f.Tabs|programMain']),
-          isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
-          tabs: []
+            handler: 'suggest',
+            query: req.query.query || '[empty query]',
+            collection: req.query.collection || 'seattleu~sp-search',
+            userIp: userIp,
+            userAgent: req.headers['user-agent'],
+            referer: req.headers.referer,
+            city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+            region: req.headers['x-vercel-ip-country-region'],
+            country: req.headers['x-vercel-ip-country'],
+            timezone: req.headers['x-vercel-ip-timezone'],
+            latitude: req.headers['x-vercel-ip-latitude'],
+            longitude: req.headers['x-vercel-ip-longitude'],
+            responseTime: processingTime,
+            resultCount: enrichedResponse.length || 0,
+            isProgramTab: Boolean(req.query['f.Tabs|programMain']),
+            isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
+            tabs: [],
+            timestamp: new Date()  // Add explicit timestamp
         };
         
         // Add tabs information
         if (analyticsData.isProgramTab) analyticsData.tabs.push('program-main');
         if (analyticsData.isStaffTab) analyticsData.tabs.push('Faculty & Staff');
         
-        // Record the analytics
-        recordQuery(analyticsData).catch(err => {
-          console.error('Error recording analytics:', err);
-        });
-      }
+        // Log analytics data (excluding sensitive info)
+        const loggableData = { ...analyticsData };
+        delete loggableData.userIp; // Remove sensitive data for logging
+        console.log('Analytics data prepared for recording:', loggableData);
+        
+        // Record the analytics with better error handling
+        try {
+            const recordResult = await recordQuery(analyticsData);
+            console.log('Analytics record result:', recordResult ? 'Saved' : 'Not saved');
+            if (recordResult && recordResult._id) {
+            console.log('Analytics record ID:', recordResult._id.toString());
+            }
+        } catch (recordError) {
+            console.error('Error recording analytics:', recordError.message);
+            console.error('Full error:', recordError);
+            
+            // Try to provide more specific error information
+            if (recordError.name === 'ValidationError') {
+            console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
+            } else if (recordError.name === 'MongooseError') {
+            console.error('Mongoose error type:', recordError.name);
+            } else if (recordError.name === 'MongoServerError') {
+            console.error('MongoDB server error code:', recordError.code);
+            }
+        }
+        } else {
+        console.log('No MongoDB URI defined, skipping analytics recording');
+        }
     } catch (analyticsError) {
-      // Log analytics error but don't fail the request
-      console.error('Analytics error:', analyticsError);
+        // Log analytics error but don't fail the request
+        console.error('Analytics preparation error:', analyticsError);
     }
+  
 
     // Send response to client
     res.json(enrichedResponse);
