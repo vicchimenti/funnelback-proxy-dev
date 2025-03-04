@@ -15,7 +15,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 3.0.1
+ * @version 3.0.2
  * @license MIT
  */
 
@@ -75,7 +75,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '3.0.1',
+        logVersion: '3.0.2',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -198,7 +198,7 @@ async function handler(req, res) {
                 const analyticsData = {
                     handler: 'suggestPeople',
                     query: req.query.query || '[empty query]',
-                    collection: 'seattleu~sp-search',
+                    searchCollection: 'seattleu~sp-search',
                     userIp: userIp,
                     userAgent: req.headers['user-agent'],
                     referer: req.headers.referer,

@@ -12,7 +12,7 @@
  * - Analytics integration for tracking search queries
  * 
  * @author Victor Chimenti
- * @version 2.0.1
+ * @version 2.0.2
  * @license MIT
  */
 
@@ -100,7 +100,7 @@ async function handler(req, res) {
                 const analyticsData = {
                     handler: 'search',
                     query: req.query.query || req.query.partial_query || '[empty query]',
-                    collection: req.query.collection || 'seattleu~sp-search',
+                    searchCollection: req.query.collection || 'seattleu~sp-search',
                     userIp: userIp,
                     userAgent: req.headers['user-agent'],
                     referer: req.headers.referer,
