@@ -14,7 +14,7 @@
 * - Query analytics integration
 * 
 * @author Victor Chimenti
-* @version 2.2.0
+* @version 2.2.1
 * @license MIT
 */
 
@@ -238,10 +238,14 @@ async function handler(req, res) {
         console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
         
         if (process.env.MONGODB_URI) {
-        // Create analytics data
-        const analyticsData = {
+            // Create analytics data
+            console.log('Raw query parameters:', req.query);  // Log all query parameters to debug
+            console.log('Looking for query in:', req.query.query, req.query.partial_query); // Check both possible fields
+
+            const analyticsData = {
             handler: 'suggest',
-            query: req.query.query || '[empty query]',
+            // Look for query in either the query parameter or partial_query parameter
+            query: req.query.query || req.query.partial_query || '[empty query]',
             collection: req.query.collection || 'seattleu~sp-search',
             userIp: userIp,
             userAgent: req.headers['user-agent'],
@@ -259,7 +263,7 @@ async function handler(req, res) {
             tabs: [],
             timestamp: new Date()  // Add explicit timestamp
         };
-        
+
         // Add tabs information
         if (analyticsData.isProgramTab) analyticsData.tabs.push('program-main');
         if (analyticsData.isStaffTab) analyticsData.tabs.push('Faculty & Staff');
