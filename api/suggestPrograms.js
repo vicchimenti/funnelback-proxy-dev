@@ -15,14 +15,16 @@
  * - Structured JSON logging with proper query tracking
  * - Request/Response tracking with detailed headers
  * - Comprehensive error handling
+ * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 1.7.1
+ * @version 2.0.2
  * @license MIT
  */
 
 const axios = require('axios');
 const os = require('os');
+const { recordQuery } = require('../lib/queryAnalytics');
 
 /**
  * Cleans program titles by removing HTML tags and selecting first pipe-separated value
@@ -101,7 +103,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-programs',
-        version: '1.7.1',
+        version: '2.0.2',
         timestamp: new Date().toISOString(),
         level,
         message,
@@ -167,18 +169,6 @@ function logEvent(level, message, data = {}) {
  * @param {Object} res - Express response object
  * @returns {Promise<void>} - Resolves when the response has been sent
  */
-/**
- * Handler for program search requests to Funnelback search service
- * Processes requests through JSON endpoint and returns top 5 results.
- * Correctly traverses Funnelback's response structure to extract program data.
- * 
- * @param {Object} req - Express request object
- * @param {Object} req.query - Query parameters from the request
- * @param {Object} req.headers - Request headers
- * @param {string} req.method - HTTP method of the request
- * @param {Object} res - Express response object
- * @returns {Promise<void>} - Resolves when the response has been sent
- */
 async function handler(req, res) {
     const startTime = Date.now();
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
@@ -233,6 +223,10 @@ async function handler(req, res) {
             resultCount: response.data.response?.resultPacket?.results?.length || 0
         });
 
+        // Get result count for analytics
+        const resultCount = response.data.response?.resultPacket?.results?.length || 0;
+        const processingTime = Date.now() - startTime;
+
         // Format response for frontend consumption with correct path traversal
         const formattedResponse = {
             metadata: {
@@ -257,11 +251,63 @@ async function handler(req, res) {
             }))
         };
 
+        // Record analytics data
+        try {
+            console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
+            
+            if (process.env.MONGODB_URI) {
+                console.log('Raw query parameters:', req.query);
+                
+                const analyticsData = {
+                    handler: 'suggestPrograms',
+                    query: req.query.query || '[empty query]',
+                    searchCollection: 'seattleu~ds-programs',
+                    userIp: userIp,
+                    userAgent: req.headers['user-agent'],
+                    referer: req.headers.referer,
+                    city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+                    region: req.headers['x-vercel-ip-country-region'],
+                    country: req.headers['x-vercel-ip-country'],
+                    timezone: req.headers['x-vercel-ip-timezone'],
+                    latitude: req.headers['x-vercel-ip-latitude'],
+                    longitude: req.headers['x-vercel-ip-longitude'],
+                    responseTime: processingTime,
+                    resultCount: resultCount,
+                    isProgramTab: true,  // This is specifically for program searches
+                    tabs: ['program-main'],
+                    timestamp: new Date()
+                };
+                
+                // Log analytics data (excluding sensitive info)
+                const loggableData = { ...analyticsData };
+                delete loggableData.userIp;
+                console.log('Analytics data prepared for recording:', loggableData);
+                
+                // Record the analytics
+                try {
+                    const recordResult = await recordQuery(analyticsData);
+                    console.log('Analytics record result:', recordResult ? 'Saved' : 'Not saved');
+                    if (recordResult && recordResult._id) {
+                        console.log('Analytics record ID:', recordResult._id.toString());
+                    }
+                } catch (recordError) {
+                    console.error('Error recording analytics:', recordError.message);
+                    if (recordError.name === 'ValidationError') {
+                        console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
+                    }
+                }
+            } else {
+                console.log('No MongoDB URI defined, skipping analytics recording');
+            }
+        } catch (analyticsError) {
+            console.error('Analytics error:', analyticsError);
+        }
+
         // Log the successful response
         logEvent('info', 'Programs search completed', {
             query: query,
             status: response.status,
-            processingTime: `${Date.now() - startTime}ms`,
+            processingTime: `${processingTime}ms`,
             responseContent: formattedResponse,
             headers: req.headers
         });
