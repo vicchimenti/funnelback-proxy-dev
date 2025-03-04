@@ -17,6 +17,17 @@
         { "src": "/api/analytics/locations", "dest": "/dashboard/api.js" },
         { "src": "/api/analytics/export", "dest": "/dashboard/api.js" },
         
+        { "src": "/api/queryCount", "dest": "/api/queryCount.js" },
+        { "src": "/api/mongoTest", "dest": "/api/mongoTest.js" },
+        
+        { "src": "/dashboard/static/(.*)", "dest": "/dashboard/frontend/build/static/$1" },
+        { "src": "/dashboard/manifest.json", "dest": "/dashboard/frontend/build/manifest.json" },
+        { "src": "/dashboard/favicon.ico", "dest": "/dashboard/frontend/build/favicon.ico" },
+        { "src": "/dashboard/logo192.png", "dest": "/dashboard/frontend/build/logo192.png" },
+        { "src": "/dashboard/logo512.png", "dest": "/dashboard/frontend/build/logo512.png" },
+        { "src": "/dashboard/asset-manifest.json", "dest": "/dashboard/frontend/build/asset-manifest.json" },
+        { "src": "/dashboard/robots.txt", "dest": "/dashboard/frontend/build/robots.txt" },
+        
         { "src": "/dashboard(.*)", "dest": "/dashboard/frontend/build/index.html" }
     ]
 }
