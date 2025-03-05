@@ -1,19 +1,20 @@
 /**
- * @fileoverview Dedicated Search Results Proxy Server
+ * @fileoverview Dedicated Search Results Proxy Server - Enhanced with Analytics
  * 
  * Handles specific search result requests for the Funnelback integration.
- * This server is optimized for handling pure search queries separate from
- * other functionality like spelling suggestions or tools.
+ * Enhanced with session tracking and improved analytics integration.
  * 
  * Features:
  * - CORS handling
  * - Search-specific parameter management
  * - Detailed logging of search requests
- * - Analytics integration for tracking search queries
+ * - Enhanced analytics with session tracking
+ * - Click-through attribution
  * 
  * @author Victor Chimenti
- * @version 2.0.2
+ * @version 2.1.0
  * @license MIT
+ * @lastModified 2025-03-05
  */
 
 const axios = require('axios');
@@ -97,6 +98,9 @@ async function handler(req, res) {
                 console.log('Raw query parameters:', req.query);
                 console.log('Looking for query in:', req.query.query, req.query.partial_query);
                 
+                // Extract session ID if provided by the client
+                const sessionId = req.query.sessionId || null;
+                
                 const analyticsData = {
                     handler: 'search',
                     query: req.query.query || req.query.partial_query || '[empty query]',
@@ -112,9 +116,12 @@ async function handler(req, res) {
                     longitude: req.headers['x-vercel-ip-longitude'],
                     responseTime: processingTime,
                     resultCount: resultCount,
+                    hasResults: resultCount > 0,
                     isProgramTab: Boolean(req.query['f.Tabs|programMain']),
                     isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
                     tabs: [],
+                    // Include session ID if available
+                    sessionId: sessionId,
                     timestamp: new Date()
                 };
                 
