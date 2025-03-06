@@ -5,9 +5,9 @@
  * including supplementary analytics data.
  * 
  * @author Victor Chimenti
- * @version 1.1.0
+ * @version 2.0.1
  * @module api/analytics/supplement
- * @lastModified 2025-03-05
+ * @lastModified 2025-03-06
  */
 
 // api/analytics/supplement.js
@@ -30,7 +30,8 @@ module.exports = async (req, res) => {
     
     try {
         const { Query } = require('mongoose').models;
-        const data = req.body;
+        const { sanitizeSessionId } = require('../../lib/schemaHandler');
+        const data = req.body || {};
         
         if (!data.query) {
             return res.status(400).json({ error: 'No query provided' });
@@ -43,12 +44,15 @@ module.exports = async (req, res) => {
             query: data.query
         };
         
-        // Add sessionId to filter if available
-        if (data.sessionId) {
-            filters.sessionId = data.sessionId;
+        // Add sessionId to filter if available (properly sanitized)
+        const sessionId = sanitizeSessionId(data.sessionId);
+        if (sessionId) {
+            filters.sessionId = sessionId;
+            console.log('Using session ID for matching:', sessionId);
         } else {
             // Fall back to IP address
             filters.userIp = userIp;
+            console.log('Using IP address for matching:', userIp);
         }
         
         // Prepare update based on provided data
@@ -59,6 +63,14 @@ module.exports = async (req, res) => {
             update.resultCount = data.resultCount;
             update.hasResults = data.resultCount > 0;
         }
+        
+        // Add enrichment data if provided
+        if (data.enrichmentData) {
+            update.enrichmentData = data.enrichmentData;
+        }
+        
+        console.log('Update filters:', filters);
+        console.log('Update data:', update);
         
         // Update the query document
         const result = await Query.findOneAndUpdate(
@@ -75,8 +87,8 @@ module.exports = async (req, res) => {
             return res.status(404).json({ error: 'Query not found' });
         }
         
-        console.log('Supplementary data recorded successfully');
-        res.status(200).json({ success: true });
+        console.log('Supplementary data recorded successfully. Record ID:', result._id.toString());
+        res.status(200).json({ success: true, recordId: result._id.toString() });
     } catch (error) {
         console.error('Error recording supplementary analytics:', error);
         res.status(500).json({ error: error.message });

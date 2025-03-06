@@ -10,15 +10,21 @@
  * - Detailed logging of search requests
  * - Enhanced analytics with session tracking
  * - Click-through attribution
+ * - Consistent schema handling
  * 
  * @author Victor Chimenti
- * @version 2.2.0
+ * @version 3.0.1
  * @license MIT
  * @lastModified 2025-03-06
  */
 
 const axios = require('axios');
 const { recordQuery } = require('../lib/queryAnalytics');
+const { 
+    createStandardAnalyticsData, 
+    sanitizeSessionId, 
+    logAnalyticsData 
+} = require('../lib/schemaHandler');
 
 /**
  * Extracts the number of results from an HTML response
@@ -37,28 +43,6 @@ function extractResultCount(htmlContent) {
         console.error('Error extracting result count:', error);
     }
     return 0;
-}
-
-/**
- * Extract session ID from request query parameters
- * Handles both string and array formats
- * 
- * @param {Object} query - The request query parameters
- * @returns {string|null} The session ID as a string or null if not found
- */
-function extractSessionId(query) {
-    if (!query.sessionId) {
-        return null;
-    }
-    
-    // If sessionId is an array, take the first value
-    if (Array.isArray(query.sessionId)) {
-        console.log('Session ID is an array, using first value:', query.sessionId[0]);
-        return query.sessionId[0];
-    }
-    
-    // Otherwise, use it as is
-    return query.sessionId;
 }
 
 /**
@@ -120,11 +104,12 @@ async function handler(req, res) {
                 console.log('Raw query parameters:', req.query);
                 console.log('Looking for query in:', req.query.query, req.query.partial_query);
                 
-                // Extract session ID if provided by the client
-                const sessionId = extractSessionId(req.query);
+                // Extract and sanitize session ID
+                const sessionId = sanitizeSessionId(req.query.sessionId);
                 console.log('Extracted session ID:', sessionId);
                 
-                const analyticsData = {
+                // Create raw analytics data
+                const rawData = {
                     handler: 'search',
                     query: req.query.query || req.query.partial_query || '[empty query]',
                     searchCollection: req.query.collection || 'seattleu~sp-search',
@@ -143,19 +128,20 @@ async function handler(req, res) {
                     isProgramTab: Boolean(req.query['f.Tabs|programMain']),
                     isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
                     tabs: [],
-                    // Include session ID if available
                     sessionId: sessionId,
-                    timestamp: new Date()
+                    timestamp: new Date(),
+                    clickedResults: [] // Initialize empty array to ensure field exists
                 };
                 
                 // Add tabs information
-                if (analyticsData.isProgramTab) analyticsData.tabs.push('program-main');
-                if (analyticsData.isStaffTab) analyticsData.tabs.push('Faculty & Staff');
+                if (rawData.isProgramTab) rawData.tabs.push('program-main');
+                if (rawData.isStaffTab) rawData.tabs.push('Faculty & Staff');
                 
-                // Log analytics data (excluding sensitive info)
-                const loggableData = { ...analyticsData };
-                delete loggableData.userIp;
-                console.log('Analytics data prepared for recording:', loggableData);
+                // Standardize data to ensure consistent schema
+                const analyticsData = createStandardAnalyticsData(rawData);
+                
+                // Log data (excluding sensitive information)
+                logAnalyticsData(analyticsData, 'search recording');
                 
                 // Record the analytics
                 try {

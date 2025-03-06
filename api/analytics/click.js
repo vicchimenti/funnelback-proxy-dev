@@ -5,9 +5,9 @@
  * including click tracking data.
  * 
  * @author Victor Chimenti
- * @version 1.1.1
+ * @version 2.0.1
  * @module api/analytics/click
- * @lastModified 2025-03-05
+ * @lastModified 2025-03-06
  */
 
 // api/analytics/click.js
@@ -32,7 +32,17 @@ module.exports = async (req, res) => {
     
     try {
         const { recordClick } = require('../../lib/queryAnalytics');
-        const clickData = req.body;
+        const { sanitizeSessionId, createStandardClickData } = require('../../lib/schemaHandler');
+        const clickData = req.body || {};
+        
+        // Validate required fields
+        if (!clickData.originalQuery) {
+            return res.status(400).json({ error: 'Missing required field: originalQuery' });
+        }
+        
+        if (!clickData.clickedUrl) {
+            return res.status(400).json({ error: 'Missing required field: clickedUrl' });
+        }
         
         // Add server-side data
         clickData.userIp = userIp;
@@ -42,15 +52,29 @@ module.exports = async (req, res) => {
         clickData.region = req.headers['x-vercel-ip-country-region'];
         clickData.country = req.headers['x-vercel-ip-country'];
         
+        // Sanitize session ID
+        clickData.sessionId = sanitizeSessionId(clickData.sessionId);
+        
+        // Log what we're recording
         console.log('Recording click data:', {
             query: clickData.originalQuery,
             url: clickData.clickedUrl,
-            position: clickData.clickPosition
+            title: clickData.clickedTitle || '(no title)',
+            position: clickData.clickPosition || 'unknown',
+            sessionId: clickData.sessionId || 'null'
         });
+        
+        // Create standardized click data
+        const standardClickData = createStandardClickData(clickData);
+        console.log('Standardized click data:', standardClickData);
         
         // Record click in database
         const result = await recordClick(clickData);
         console.log('Click recorded:', result ? 'Success' : 'Failed');
+        
+        if (result && result._id) {
+            console.log('Updated record ID:', result._id.toString());
+        }
         
         // Send minimal response for performance
         res.status(200).json({ success: true });
@@ -58,4 +82,4 @@ module.exports = async (req, res) => {
         console.error('Error recording click:', error);
         res.status(500).json({ error: error.message });
     }
-};
+}

@@ -11,14 +11,21 @@
  * - Query parameter management
  * - Error handling and logging
  * - Analytics integration
+ * - Consistent schema handling
  * 
  * @author Victor Chimenti
- * @version 2.0.2
+ * @version 3.0.1
  * @license MIT
+ * @lastModified 2025-03-06
  */
 
 const axios = require('axios');
 const { recordQuery } = require('../lib/queryAnalytics');
+const { 
+    createStandardAnalyticsData, 
+    sanitizeSessionId, 
+    logAnalyticsData 
+} = require('../lib/schemaHandler');
 
 /**
  * Extracts the number of results from an HTML response
@@ -102,11 +109,12 @@ async function handler(req, res) {
             console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
             
             if (process.env.MONGODB_URI) {
-                // Extract query from query parameters - looking at both query and partial_query
-                console.log('Raw query parameters:', req.query);
-                console.log('Looking for query in:', req.query.query, req.query.partial_query);
+                // Extract and sanitize session ID
+                const sessionId = sanitizeSessionId(req.query.sessionId);
+                console.log('Extracted session ID:', sessionId);
                 
-                const analyticsData = {
+                // Create raw analytics data
+                const rawData = {
                     handler: 'server',
                     query: req.query.query || req.query.partial_query || '[empty query]',
                     searchCollection: params.collection,
@@ -121,20 +129,24 @@ async function handler(req, res) {
                     longitude: req.headers['x-vercel-ip-longitude'],
                     responseTime: processingTime,
                     resultCount: resultCount,
+                    hasResults: resultCount > 0,
                     isProgramTab: Boolean(req.query['f.Tabs|programMain']),
                     isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
                     tabs: [],
+                    sessionId: sessionId,
+                    clickedResults: [], // Initialize empty array to ensure field exists
                     timestamp: new Date()
                 };
                 
                 // Add tabs information
-                if (analyticsData.isProgramTab) analyticsData.tabs.push('program-main');
-                if (analyticsData.isStaffTab) analyticsData.tabs.push('Faculty & Staff');
+                if (rawData.isProgramTab) rawData.tabs.push('program-main');
+                if (rawData.isStaffTab) rawData.tabs.push('Faculty & Staff');
                 
-                // Log analytics data (excluding sensitive info)
-                const loggableData = { ...analyticsData };
-                delete loggableData.userIp;
-                console.log('Analytics data prepared for recording:', loggableData);
+                // Standardize data to ensure consistent schema
+                const analyticsData = createStandardAnalyticsData(rawData);
+                
+                // Log data (excluding sensitive information)
+                logAnalyticsData(analyticsData, 'server recording');
                 
                 // Record the analytics
                 try {

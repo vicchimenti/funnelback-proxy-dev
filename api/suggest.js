@@ -14,15 +14,22 @@
 * - Enrichment data recording
 * - Comprehensive error handling with detailed logging
 * - Query analytics integration
+* - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 2.3.1
+* @version 3.0.0
 * @license MIT
+* @lastModified 2025-03-06
 */
 
 const axios = require('axios');
 const os = require('os');
 const { recordQuery } = require('../lib/queryAnalytics');
+const { 
+    createStandardAnalyticsData, 
+    sanitizeSessionId, 
+    logAnalyticsData 
+} = require('../lib/schemaHandler');
 
 // Don't initialize MongoDB connection here - we'll handle that in the recordQuery function
 
@@ -119,6 +126,11 @@ function logEvent(level, message, data = {}) {
 * @returns {Array<Object>} Enriched suggestions with metadata
 */
 function enrichSuggestions(suggestions, query) {
+    if (!Array.isArray(suggestions)) {
+        console.log('No suggestions to enrich or invalid format');
+        return [];
+    }
+    
     // Log incoming request parameters
     console.log('Enrichment Request Parameters:', {
         isProgramTab: Boolean(query['f.Tabs|programMain']),
@@ -126,7 +138,8 @@ function enrichSuggestions(suggestions, query) {
         tabParameters: {
             program: query['f.Tabs|programMain'],
             staff: query['f.Tabs|seattleu~ds-staff']
-        }
+        },
+        suggestionCount: suggestions.length
     });
 
     // Determine which tab made the request
@@ -170,28 +183,6 @@ function enrichSuggestions(suggestions, query) {
     });
 
     return enrichedSuggestions;
-}
-
-/**
-* Extract session ID from request query parameters
-* Handles both string and array formats
-* 
-* @param {Object} query - The request query parameters
-* @returns {string|null} The session ID as a string or null if not found
-*/
-function extractSessionId(query) {
-    if (!query.sessionId) {
-        return null;
-    }
-    
-    // If sessionId is an array, take the first value
-    if (Array.isArray(query.sessionId)) {
-        console.log('Session ID is an array, using first value:', query.sessionId[0]);
-        return query.sessionId[0];
-    }
-    
-    // Otherwise, use it as is
-    return query.sessionId;
 }
 
 /**
@@ -242,8 +233,11 @@ async function handler(req, res) {
         }
     });
 
+    // Ensure response data is an array (handle API inconsistencies)
+    const responseData = Array.isArray(response.data) ? response.data : [];
+
     // Enrich suggestions with metadata
-    const enrichedResponse = enrichSuggestions(response.data, req.query);
+    const enrichedResponse = enrichSuggestions(responseData, req.query);
     
     // Process time for this request
     const processingTime = Date.now() - startTime;
@@ -262,17 +256,13 @@ async function handler(req, res) {
         console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
         
         if (process.env.MONGODB_URI) {
-            // Create analytics data
-            console.log('Raw query parameters:', req.query);  // Log all query parameters to debug
-            console.log('Looking for query in:', req.query.query, req.query.partial_query); // Check both possible fields
-
-            // Extract session ID if provided by the client
-            const sessionId = extractSessionId(req.query);
+            // Extract and sanitize session ID
+            const sessionId = sanitizeSessionId(req.query.sessionId);
             console.log('Extracted session ID:', sessionId);
             
-            const analyticsData = {
+            // Create raw analytics data
+            const rawData = {
                 handler: 'suggest',
-                // Look for query in either the query parameter or partial_query parameter
                 query: req.query.query || req.query.partial_query || '[empty query]',
                 collection: req.query.collection || 'seattleu~sp-search',
                 userIp: userIp,
@@ -290,9 +280,8 @@ async function handler(req, res) {
                 isProgramTab: Boolean(req.query['f.Tabs|programMain']),
                 isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
                 tabs: [],
-                // Include session ID if available
                 sessionId: sessionId,
-                // Include enrichment data
+                clickedResults: [], // Ensure field exists
                 enrichmentData: {
                     totalSuggestions: enrichedResponse.length,
                     suggestionsData: enrichedResponse.map(s => ({
@@ -304,13 +293,14 @@ async function handler(req, res) {
             };
 
             // Add tabs information
-            if (analyticsData.isProgramTab) analyticsData.tabs.push('program-main');
-            if (analyticsData.isStaffTab) analyticsData.tabs.push('Faculty & Staff');
+            if (rawData.isProgramTab) rawData.tabs.push('program-main');
+            if (rawData.isStaffTab) rawData.tabs.push('Faculty & Staff');
+            
+            // Standardize data to ensure consistent schema
+            const analyticsData = createStandardAnalyticsData(rawData);
             
             // Log analytics data (excluding sensitive info)
-            const loggableData = { ...analyticsData };
-            delete loggableData.userIp; // Remove sensitive data for logging
-            console.log('Analytics data prepared for recording:', loggableData);
+            logAnalyticsData(analyticsData, 'suggest recording');
             
             // Record the analytics with better error handling
             try {
