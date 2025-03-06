@@ -10,11 +10,13 @@
 * - Structured JSON logging for Vercel
 * - Request/Response tracking with detailed headers
 * - Query parameter tracking
+* - Session-based analytics tracking
+* - Enrichment data recording
 * - Comprehensive error handling with detailed logging
 * - Query analytics integration
 * 
 * @author Victor Chimenti
-* @version 2.2.1
+* @version 2.3.1
 * @license MIT
 */
 
@@ -171,8 +173,30 @@ function enrichSuggestions(suggestions, query) {
 }
 
 /**
+* Extract session ID from request query parameters
+* Handles both string and array formats
+* 
+* @param {Object} query - The request query parameters
+* @returns {string|null} The session ID as a string or null if not found
+*/
+function extractSessionId(query) {
+    if (!query.sessionId) {
+        return null;
+    }
+    
+    // If sessionId is an array, take the first value
+    if (Array.isArray(query.sessionId)) {
+        console.log('Session ID is an array, using first value:', query.sessionId[0]);
+        return query.sessionId[0];
+    }
+    
+    // Otherwise, use it as is
+    return query.sessionId;
+}
+
+/**
 * Handler for suggestion requests to Funnelback search service
-* Now includes analytics tracking
+* Now includes enhanced analytics tracking with session support
 * 
 * @param {Object} req - Express request object
 * @param {Object} req.query - Query parameters from the request
@@ -242,66 +266,80 @@ async function handler(req, res) {
             console.log('Raw query parameters:', req.query);  // Log all query parameters to debug
             console.log('Looking for query in:', req.query.query, req.query.partial_query); // Check both possible fields
 
-            const analyticsData = {
-            handler: 'suggest',
-            // Look for query in either the query parameter or partial_query parameter
-            query: req.query.query || req.query.partial_query || '[empty query]',
-            collection: req.query.collection || 'seattleu~sp-search',
-            userIp: userIp,
-            userAgent: req.headers['user-agent'],
-            referer: req.headers.referer,
-            city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-            region: req.headers['x-vercel-ip-country-region'],
-            country: req.headers['x-vercel-ip-country'],
-            timezone: req.headers['x-vercel-ip-timezone'],
-            latitude: req.headers['x-vercel-ip-latitude'],
-            longitude: req.headers['x-vercel-ip-longitude'],
-            responseTime: processingTime,
-            resultCount: enrichedResponse.length || 0,
-            isProgramTab: Boolean(req.query['f.Tabs|programMain']),
-            isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
-            tabs: [],
-            timestamp: new Date()  // Add explicit timestamp
-        };
-
-        // Add tabs information
-        if (analyticsData.isProgramTab) analyticsData.tabs.push('program-main');
-        if (analyticsData.isStaffTab) analyticsData.tabs.push('Faculty & Staff');
-        
-        // Log analytics data (excluding sensitive info)
-        const loggableData = { ...analyticsData };
-        delete loggableData.userIp; // Remove sensitive data for logging
-        console.log('Analytics data prepared for recording:', loggableData);
-        
-        // Record the analytics with better error handling
-        try {
-            const recordResult = await recordQuery(analyticsData);
-            console.log('Analytics record result:', recordResult ? 'Saved' : 'Not saved');
-            if (recordResult && recordResult._id) {
-            console.log('Analytics record ID:', recordResult._id.toString());
-            }
-        } catch (recordError) {
-            console.error('Error recording analytics:', recordError.message);
-            console.error('Full error:', recordError);
+            // Extract session ID if provided by the client
+            const sessionId = extractSessionId(req.query);
+            console.log('Extracted session ID:', sessionId);
             
-            // Try to provide more specific error information
-            if (recordError.name === 'ValidationError') {
-            console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
-            } else if (recordError.name === 'MongooseError') {
-            console.error('Mongoose error type:', recordError.name);
-            } else if (recordError.name === 'MongoServerError') {
-            console.error('MongoDB server error code:', recordError.code);
+            const analyticsData = {
+                handler: 'suggest',
+                // Look for query in either the query parameter or partial_query parameter
+                query: req.query.query || req.query.partial_query || '[empty query]',
+                collection: req.query.collection || 'seattleu~sp-search',
+                userIp: userIp,
+                userAgent: req.headers['user-agent'],
+                referer: req.headers.referer,
+                city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+                region: req.headers['x-vercel-ip-country-region'],
+                country: req.headers['x-vercel-ip-country'],
+                timezone: req.headers['x-vercel-ip-timezone'],
+                latitude: req.headers['x-vercel-ip-latitude'],
+                longitude: req.headers['x-vercel-ip-longitude'],
+                responseTime: processingTime,
+                resultCount: enrichedResponse.length || 0,
+                hasResults: enrichedResponse.length > 0,
+                isProgramTab: Boolean(req.query['f.Tabs|programMain']),
+                isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
+                tabs: [],
+                // Include session ID if available
+                sessionId: sessionId,
+                // Include enrichment data
+                enrichmentData: {
+                    totalSuggestions: enrichedResponse.length,
+                    suggestionsData: enrichedResponse.map(s => ({
+                        display: s.display,
+                        tabs: s.metadata.tabs
+                    }))
+                },
+                timestamp: new Date()
+            };
+
+            // Add tabs information
+            if (analyticsData.isProgramTab) analyticsData.tabs.push('program-main');
+            if (analyticsData.isStaffTab) analyticsData.tabs.push('Faculty & Staff');
+            
+            // Log analytics data (excluding sensitive info)
+            const loggableData = { ...analyticsData };
+            delete loggableData.userIp; // Remove sensitive data for logging
+            console.log('Analytics data prepared for recording:', loggableData);
+            
+            // Record the analytics with better error handling
+            try {
+                const recordResult = await recordQuery(analyticsData);
+                console.log('Analytics record result:', recordResult ? 'Saved' : 'Not saved');
+                if (recordResult && recordResult._id) {
+                    console.log('Analytics record ID:', recordResult._id.toString());
+                }
+            } catch (recordError) {
+                console.error('Error recording analytics:', recordError.message);
+                console.error('Full error:', recordError);
+                
+                // Try to provide more specific error information
+                if (recordError.name === 'ValidationError') {
+                    console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
+                } else if (recordError.name === 'MongooseError') {
+                    console.error('Mongoose error type:', recordError.name);
+                } else if (recordError.name === 'MongoServerError') {
+                    console.error('MongoDB server error code:', recordError.code);
+                }
             }
-        }
         } else {
-        console.log('No MongoDB URI defined, skipping analytics recording');
+            console.log('No MongoDB URI defined, skipping analytics recording');
         }
     } catch (analyticsError) {
         // Log analytics error but don't fail the request
         console.error('Analytics preparation error:', analyticsError);
     }
   
-
     // Send response to client
     res.json(enrichedResponse);
    } catch (error) {
