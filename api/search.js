@@ -12,9 +12,9 @@
  * - Click-through attribution
  * 
  * @author Victor Chimenti
- * @version 2.1.0
+ * @version 2.2.0
  * @license MIT
- * @lastModified 2025-03-05
+ * @lastModified 2025-03-06
  */
 
 const axios = require('axios');
@@ -37,6 +37,28 @@ function extractResultCount(htmlContent) {
         console.error('Error extracting result count:', error);
     }
     return 0;
+}
+
+/**
+ * Extract session ID from request query parameters
+ * Handles both string and array formats
+ * 
+ * @param {Object} query - The request query parameters
+ * @returns {string|null} The session ID as a string or null if not found
+ */
+function extractSessionId(query) {
+    if (!query.sessionId) {
+        return null;
+    }
+    
+    // If sessionId is an array, take the first value
+    if (Array.isArray(query.sessionId)) {
+        console.log('Session ID is an array, using first value:', query.sessionId[0]);
+        return query.sessionId[0];
+    }
+    
+    // Otherwise, use it as is
+    return query.sessionId;
 }
 
 /**
@@ -99,7 +121,8 @@ async function handler(req, res) {
                 console.log('Looking for query in:', req.query.query, req.query.partial_query);
                 
                 // Extract session ID if provided by the client
-                const sessionId = req.query.sessionId || null;
+                const sessionId = extractSessionId(req.query);
+                console.log('Extracted session ID:', sessionId);
                 
                 const analyticsData = {
                     handler: 'search',
