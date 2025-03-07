@@ -8,6 +8,11 @@
         { "src": "/proxy/funnelback/suggest", "dest": "/api/suggest.js" },
         { "src": "/proxy/suggestPeople", "dest": "/api/suggestPeople.js" },
         { "src": "/proxy/suggestPrograms", "dest": "/api/suggestPrograms.js" },
+        
+        { "src": "/proxy/analytics/click", "dest": "/api/analytics/click.js" },
+        { "src": "/proxy/analytics/clicks-batch", "dest": "/api/analytics/clicksBatch.js" },
+        { "src": "/proxy/analytics/supplement", "dest": "/api/analytics/supplement.js" },
+        { "src": "/proxy/analytics", "dest": "/api/analytics/supplement.js" },
 
         { "src": "/api/analytics/summary", "dest": "/dashboard/api.js" },
         { "src": "/api/analytics/trends", "dest": "/dashboard/api.js" },
@@ -30,5 +35,16 @@
         { "src": "/dashboard/robots.txt", "dest": "/dashboard/frontend/build/robots.txt" },
         
         { "src": "/dashboard(.*)", "dest": "/dashboard/frontend/build/index.html" }
+    ],
+    "headers": [
+        {
+            "source": "/proxy/analytics/(.*)",
+            "headers": [
+                { "key": "Access-Control-Allow-Credentials", "value": "true" },
+                { "key": "Access-Control-Allow-Origin", "value": "https://www.seattleu.edu" },
+                { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
+                { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Origin" }
+            ]
+        }
     ]
 }
