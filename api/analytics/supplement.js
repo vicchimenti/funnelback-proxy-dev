@@ -5,9 +5,9 @@
  * including supplementary analytics data.
  * 
  * @author Victor Chimenti
- * @version 2.0.1
+ * @version 2.0.2
  * @module api/analytics/supplement
- * @lastModified 2025-03-06
+ * @lastModified 2025-03-07
  */
 
 // api/analytics/supplement.js
@@ -16,8 +16,9 @@ module.exports = async (req, res) => {
     
     // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Origin');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
 
     if (req.method === 'OPTIONS') {
         res.status(200).end();

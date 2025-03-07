@@ -5,9 +5,9 @@
  * including click tracking data.
  * 
  * @author Victor Chimenti
- * @version 2.0.1
+ * @version 2.0.2
  * @module api/analytics/click
- * @lastModified 2025-03-06
+ * @lastModified 2025-03-07
  */
 
 // api/analytics/click.js
