@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-# Funnelback Proxy API
+# Funnelback Proxy API - Development Environment
 
 A lightweight proxy server system that manages search functionality between Seattle University's frontend applications and Funnelback's search services.
 
@@ -206,10 +205,10 @@ The API is configured for deployment on Vercel with the following route structur
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/funnelback-proxy.git
+git clone https://github.com/your-username/funnelback-proxy-dev.git
 
 # Navigate to the project directory
-cd funnelback-proxy
+cd funnelback-proxy-dev
 
 # Install dependencies
 npm install
@@ -386,7 +385,7 @@ These tests will help ensure:
 
 ## Repository Usage
 
-This repository is connected directly to production systems. Access is restricted to authorized collaborators only.
+This repository is a development environment for testing improvements to the production Funnelback proxy system. Changes made here can be tested thoroughly before implementation in the production environment.
 
 ### For Collaborators
 
@@ -394,7 +393,7 @@ Authorized collaborators must follow these guidelines when working with the repo
 
 1. Clone the repository directly:
    ```bash
-   git clone https://github.com/your-username/funnelback-proxy.git
+   git clone https://github.com/your-username/funnelback-proxy-dev.git
    ```
 
 2. Always create a new branch for changes:
@@ -416,9 +415,9 @@ Authorized collaborators must follow these guidelines when working with the repo
    - Validate logging output
 
 5. Deployment process:
-   - Merges to main branch automatically deploy to production
-   - All changes must be reviewed by at least one other collaborator
-   - Deploy during low-traffic periods when possible
+   - Deployments to the development environment are managed through Vercel
+   - All changes must be tested in this environment before being applied to production
+   - Document all improvements and changes for future reference
 
 ### Security Notes
 
@@ -430,14 +429,14 @@ Authorized collaborators must follow these guidelines when working with the repo
 ### Repository Access
 
 - Read/Write access: Restricted to authorized collaborators only
-- Deploy access: Restricted to production systems
-- Branch protection: Enabled on main branch
+- Deploy access: Restricted to development systems
+- Branch protection: Recommended for main branch
 
 For questions or access requests, contact the repository owner.
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your-username/funnelback-proxy/tags).
+We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your-username/funnelback-proxy-dev/tags).
 
 ## License
 
@@ -446,8 +445,3 @@ MIT License - See LICENSE file for details
 ## Author
 
 Victor Chimenti
-
-EOF
-=======
-# Funnelback Proxy Development Environment
->>>>>>> 8778814ac0f2af22a509f124db9004c42857970b
