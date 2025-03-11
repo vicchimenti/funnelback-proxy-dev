@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Funnelback Proxy API
 
 A lightweight proxy server system that manages search functionality between Seattle University's frontend applications and Funnelback's search services.
@@ -447,3 +448,6 @@ MIT License - See LICENSE file for details
 Victor Chimenti
 
 EOF
+=======
+# Funnelback Proxy Development Environment
+>>>>>>> 8778814ac0f2af22a509f124db9004c42857970b
