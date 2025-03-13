@@ -5,14 +5,17 @@
  * including click tracking data.
  * 
  * @author Victor Chimenti
- * @version 2.0.2
+ * @version 2.1.0
  * @module api/analytics/click
- * @lastModified 2025-03-07
+ * @lastModified 2025-03-12
  */
 
 // api/analytics/click.js
 module.exports = async (req, res) => {
-    const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    // const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    const userIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
+
     
     // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
