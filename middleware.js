@@ -12,7 +12,6 @@ const LIMITS = {
 };
 
 // We'll manually clean the cache after each request
-// since we can't use setInterval in edge functions
 function cleanupCache() {
   const now = Date.now();
   for (const [key, value] of ipCache.entries()) {
@@ -29,9 +28,8 @@ export default async function middleware(request) {
   const url = new URL(request.url);
   const path = url.pathname;
   
-  // Handle OPTIONS requests (preflight) specially to maintain CORS
+  // Handle OPTIONS requests specially to maintain CORS
   if (request.method === 'OPTIONS') {
-    // Let the actual handlers deal with OPTIONS requests
     return fetch(request);
   }
   
@@ -100,13 +98,25 @@ export default async function middleware(request) {
     return response;
   }
   
-  // For successful requests, proceed with the original request
-  const response = await fetch(request);
+  // Clone the request with the original client IP preserved
+  const requestHeaders = new Headers(request.headers);
   
-  // Clone the response to be able to modify headers
+  // Create a new request with the cloned headers
+  const newRequest = new Request(request.url, {
+    method: request.method,
+    headers: requestHeaders,
+    body: request.body,
+    redirect: request.redirect,
+    signal: request.signal
+  });
+  
+  // For successful requests, proceed with the modified request
+  const response = await fetch(newRequest);
+  
+  // Clone the response to modify headers
   const newResponse = new Response(response.body, response);
   
-  // Add rate limit information to headers without disturbing existing ones
+  // Add rate limit information to headers
   newResponse.headers.set('X-RateLimit-Limit', rateLimit.toString());
   newResponse.headers.set('X-RateLimit-Remaining', (rateLimit - rateData.count).toString());
   newResponse.headers.set('X-RateLimit-Reset', rateData.resetTime.toString());
