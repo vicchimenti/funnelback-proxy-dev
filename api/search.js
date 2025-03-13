@@ -13,7 +13,7 @@
  * - Consistent schema handling
  * 
  * @author Victor Chimenti
- * @version 3.1.0
+ * @version 3.1.1
  * @license MIT
  * @lastModified 2025-03-13
  */
@@ -59,7 +59,22 @@ async function handler(req, res) {
     const startTime = Date.now();
     // const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-    const userIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
+    // const userIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
+
+    const userIp = req.headers['x-original-client-ip'] || 
+               (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
+               (req.headers['x-real-ip']) || 
+               req.socket.remoteAddress;
+
+    // Add debug logging
+    console.log('IP Headers:', {
+    originalClientIp: req.headers['x-original-client-ip'],
+    forwardedFor: req.headers['x-forwarded-for'],
+    realIp: req.headers['x-real-ip'],
+    socketRemote: req.socket.remoteAddress,
+    vercelIpCity: req.headers['x-vercel-ip-city'],
+    finalUserIp: userIp
+    });
 
     
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
@@ -110,6 +125,14 @@ async function handler(req, res) {
                 // Extract and sanitize session ID
                 const sessionId = sanitizeSessionId(req.query.sessionId);
                 console.log('Extracted session ID:', sessionId);
+
+                // Add detailed session ID debugging AFTER extraction
+                console.log('Session ID sources:', {
+                    fromQueryParam: req.query.sessionId,
+                    fromHeader: req.headers['x-session-id'],
+                    fromBody: req.body?.sessionId,
+                    afterSanitization: sessionId
+                });
                 
                 // Create raw analytics data
                 const rawData = {

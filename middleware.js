@@ -32,9 +32,12 @@ export default async function middleware(request) {
   if (request.method === 'OPTIONS') {
     return fetch(request);
   }
+
+  // Extract client IP from various headers, prioritizing the most likely to be accurate
+  const clientIp = request.headers.get('x-real-ip') || 
+                   request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 
+                   'unknown';
   
-  // Get client IP
-  const ip = request.headers.get('x-forwarded-for') || 'unknown';
   const now = Date.now();
   
   // Determine appropriate rate limit based on endpoint type
@@ -51,14 +54,14 @@ export default async function middleware(request) {
   }
   
   // Initialize or get current rate limit data
-  if (!ipCache.has(ip)) {
-    ipCache.set(ip, {
+  if (!ipCache.has(clientIp)) {
+    ipCache.set(clientIp, {
       count: 0,
       resetTime: now + WINDOW_MS
     });
   }
   
-  const rateData = ipCache.get(ip);
+  const rateData = ipCache.get(clientIp);
   
   // Reset counter if time window has elapsed
   if (now > rateData.resetTime) {
@@ -101,8 +104,16 @@ export default async function middleware(request) {
   // Clone the request with the original client IP preserved
   const requestHeaders = new Headers(request.headers);
   
-  // Create a new request with the cloned headers
-  const newRequest = new Request(request.url, {
+  // Explicitly set clean headers for downstream functions
+  requestHeaders.set('x-original-client-ip', clientIp);
+  
+  // Preserve any sessionId in the URL parameters
+  if (url.searchParams.has('sessionId')) {
+    requestHeaders.set('x-session-id', url.searchParams.get('sessionId'));
+  }
+  
+  // Create a new request with modified headers
+  const newRequest = new Request(url, {
     method: request.method,
     headers: requestHeaders,
     body: request.body,

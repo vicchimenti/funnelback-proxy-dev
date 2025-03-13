@@ -5,7 +5,7 @@
  * including click tracking data.
  * 
  * @author Victor Chimenti
- * @version 2.1.0
+ * @version 2.1.2
  * @module api/analytics/click
  * @lastModified 2025-03-12
  */
@@ -14,7 +14,22 @@
 module.exports = async (req, res) => {
     // const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-    const userIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
+    // const userIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
+
+    const userIp = req.headers['x-original-client-ip'] || 
+               (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
+               (req.headers['x-real-ip']) || 
+               req.socket.remoteAddress;
+
+    // Add IP debug logging
+    console.log('IP Headers:', {
+    originalClientIp: req.headers['x-original-client-ip'],
+    forwardedFor: req.headers['x-forwarded-for'],
+    realIp: req.headers['x-real-ip'],
+    socketRemote: req.socket.remoteAddress,
+    vercelIpCity: req.headers['x-vercel-ip-city'],
+    finalUserIp: userIp
+    });
 
     
     // Set CORS headers
@@ -37,6 +52,15 @@ module.exports = async (req, res) => {
     try {
         const { recordClick } = require('../../lib/queryAnalytics');
         const { sanitizeSessionId, createStandardClickData } = require('../../lib/schemaHandler');
+
+        // Add detailed session ID debugging AFTER extraction
+        console.log('Session ID sources:', {
+            fromQueryParam: req.query.sessionId,
+            fromHeader: req.headers['x-session-id'],
+            fromBody: req.body?.sessionId,
+            afterSanitization: sessionId
+        });
+
         const clickData = req.body || {};
         
         // Validate required fields
