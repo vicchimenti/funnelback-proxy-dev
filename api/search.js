@@ -13,9 +13,9 @@
  * - Consistent schema handling
  * 
  * @author Victor Chimenti
- * @version 3.0.1
+ * @version 3.1.0
  * @license MIT
- * @lastModified 2025-03-06
+ * @lastModified 2025-03-13
  */
 
 const axios = require('axios');
@@ -57,7 +57,10 @@ function extractResultCount(htmlContent) {
  */
 async function handler(req, res) {
     const startTime = Date.now();
-    const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    // const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    const userIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
+
     
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
