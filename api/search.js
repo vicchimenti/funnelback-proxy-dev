@@ -11,20 +11,23 @@
  * - Enhanced analytics with session tracking
  * - Click-through attribution
  * - Consistent schema handling
+ * - GeoIP-based location tracking
  * 
  * @author Victor Chimenti
- * @version 3.1.1
+ * @version 3.3.0
  * @license MIT
  * @lastModified 2025-03-13
  */
 
 const axios = require('axios');
+const { getLocationData } = require('../lib/geoIpService');
 const { recordQuery } = require('../lib/queryAnalytics');
 const { 
     createStandardAnalyticsData, 
     sanitizeSessionId, 
     logAnalyticsData 
 } = require('../lib/schemaHandler');
+
 
 /**
  * Extracts the number of results from an HTML response
@@ -57,10 +60,8 @@ function extractResultCount(htmlContent) {
  */
 async function handler(req, res) {
     const startTime = Date.now();
-    // const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-    // const userIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
-
+    // Get client IP from custom header or fallback methods
     const userIp = req.headers['x-original-client-ip'] || 
                (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
                (req.headers['x-real-ip']) || 
@@ -68,15 +69,15 @@ async function handler(req, res) {
 
     // Add debug logging
     console.log('IP Headers:', {
-    originalClientIp: req.headers['x-original-client-ip'],
-    forwardedFor: req.headers['x-forwarded-for'],
-    realIp: req.headers['x-real-ip'],
-    socketRemote: req.socket.remoteAddress,
-    vercelIpCity: req.headers['x-vercel-ip-city'],
-    finalUserIp: userIp
+        originalClientIp: req.headers['x-original-client-ip'],
+        forwardedFor: req.headers['x-forwarded-for'],
+        realIp: req.headers['x-real-ip'],
+        socketRemote: req.socket.remoteAddress,
+        vercelIpCity: req.headers['x-vercel-ip-city'],
+        finalUserIp: userIp
     });
-
     
+    // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -123,16 +124,20 @@ async function handler(req, res) {
                 console.log('Looking for query in:', req.query.query, req.query.partial_query);
                 
                 // Extract and sanitize session ID
-                const sessionId = sanitizeSessionId(req.query.sessionId);
+                const sessionId = sanitizeSessionId(req.query.sessionId || req.headers['x-session-id']);
                 console.log('Extracted session ID:', sessionId);
 
-                // Add detailed session ID debugging AFTER extraction
+                // Add detailed session ID debugging
                 console.log('Session ID sources:', {
                     fromQueryParam: req.query.sessionId,
                     fromHeader: req.headers['x-session-id'],
                     fromBody: req.body?.sessionId,
                     afterSanitization: sessionId
                 });
+                
+                // Get location data based on the user's IP
+                const locationData = await getLocationData(userIp);
+                console.log('GeoIP location data:', locationData);
                 
                 // Create raw analytics data
                 const rawData = {
@@ -142,12 +147,13 @@ async function handler(req, res) {
                     userIp: userIp,
                     userAgent: req.headers['user-agent'],
                     referer: req.headers.referer,
-                    city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-                    region: req.headers['x-vercel-ip-country-region'],
-                    country: req.headers['x-vercel-ip-country'],
-                    timezone: req.headers['x-vercel-ip-timezone'],
-                    latitude: req.headers['x-vercel-ip-latitude'],
-                    longitude: req.headers['x-vercel-ip-longitude'],
+                    // Use GeoIP location data with Vercel's data as fallback
+                    city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+                    region: locationData.region || req.headers['x-vercel-ip-country-region'],
+                    country: locationData.country || req.headers['x-vercel-ip-country'],
+                    timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
+                    latitude: locationData.latitude || req.headers['x-vercel-ip-latitude'],
+                    longitude: locationData.longitude || req.headers['x-vercel-ip-longitude'],
                     responseTime: processingTime,
                     resultCount: resultCount,
                     hasResults: resultCount > 0,
