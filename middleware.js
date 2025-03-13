@@ -1,36 +1,33 @@
 // middleware.js
-export default async function middleware(request) {
-  // Simple in-memory store with expiry
-  if (!global._ipCache) {
-    global._ipCache = new Map();
-    
-    // Set up cleanup interval
-    if (!global._cleanupInterval) {
-      global._cleanupInterval = setInterval(() => {
-        const now = Date.now();
-        for (const [key, value] of global._ipCache.entries()) {
-          if (now > value.resetTime) {
-            global._ipCache.delete(key);
-          }
-        }
-      }, 60000); // 1 minute
+const ipCache = new Map();
+const WINDOW_MS = 60 * 1000; // 1 minute
+
+// Different rate limits for different endpoint types
+const LIMITS = {
+  search: 30,     // Search endpoints
+  suggest: 60,    // Suggestion endpoints (higher limit for typing)
+  analytics: 50,  // Analytics endpoints
+  dashboard: 20,  // Admin dashboard endpoints
+  default: 30     // Default for any other endpoints
+};
+
+// We'll manually clean the cache after each request
+// since we can't use setInterval in edge functions
+function cleanupCache() {
+  const now = Date.now();
+  for (const [key, value] of ipCache.entries()) {
+    if (now > value.resetTime) {
+      ipCache.delete(key);
     }
   }
+}
+
+export default async function middleware(request) {
+  // Clean up expired entries
+  cleanupCache();
   
   const url = new URL(request.url);
   const path = url.pathname;
-  const ipCache = global._ipCache;
-  
-  // Different rate limits for different endpoint types
-  const LIMITS = {
-    search: 30,     // Search endpoints
-    suggest: 60,    // Suggestion endpoints (higher limit for typing)
-    analytics: 50,  // Analytics endpoints
-    dashboard: 20,  // Admin dashboard endpoints
-    default: 30     // Default for any other endpoints
-  };
-  
-  const WINDOW_MS = 60 * 1000; // 1 minute window
   
   // Handle OPTIONS requests (preflight) specially to maintain CORS
   if (request.method === 'OPTIONS') {
@@ -104,7 +101,6 @@ export default async function middleware(request) {
   }
   
   // For successful requests, proceed with the original request
-  // and let your handlers set the appropriate CORS headers
   const response = await fetch(request);
   
   // Clone the response to be able to modify headers
