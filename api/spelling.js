@@ -9,15 +9,24 @@
  * - CORS handling
  * - Spelling-specific parameter management
  * - Detailed request logging
- * - Analytics integration
+ * - Enhanced analytics integration
+ * - GeoIP-based location tracking
+ * - Session tracking
  * 
  * @author Victor Chimenti
- * @version 2.0.2
+ * @version 3.1.0
  * @license MIT
+ * @lastModified 2025-03-15
  */
 
 const axios = require('axios');
+const { getLocationData } = require('../lib/geoIpService');
 const { recordQuery } = require('../lib/queryAnalytics');
+const { 
+    createStandardAnalyticsData, 
+    sanitizeSessionId, 
+    logAnalyticsData 
+} = require('../lib/schemaHandler');
 
 /**
  * Extracts spelling suggestions from HTML response
@@ -57,7 +66,22 @@ function extractSpellingSuggestions(htmlContent) {
  */
 async function handler(req, res) {
     const startTime = Date.now();
-    const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    
+    // Get client IP from custom header or fallback methods
+    const userIp = req.headers['x-original-client-ip'] || 
+               (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
+               (req.headers['x-real-ip']) || 
+               req.socket.remoteAddress;
+
+    // Add debug logging
+    console.log('IP Headers:', {
+        originalClientIp: req.headers['x-original-client-ip'],
+        forwardedFor: req.headers['x-forwarded-for'],
+        realIp: req.headers['x-real-ip'],
+        socketRemote: req.socket.remoteAddress,
+        vercelIpCity: req.headers['x-vercel-ip-city'],
+        finalUserIp: userIp
+    });
     
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -101,6 +125,22 @@ async function handler(req, res) {
         const suggestions = extractSpellingSuggestions(response.data);
         const processingTime = Date.now() - startTime;
         
+        // Extract and sanitize session ID
+        const sessionId = sanitizeSessionId(req.query.sessionId || req.headers['x-session-id']);
+        console.log('Extracted session ID:', sessionId);
+
+        // Add detailed session ID debugging
+        console.log('Session ID sources:', {
+            fromQueryParam: req.query.sessionId,
+            fromHeader: req.headers['x-session-id'],
+            fromBody: req.body?.sessionId,
+            afterSanitization: sessionId
+        });
+        
+        // Get location data based on the user's IP
+        const locationData = await getLocationData(userIp);
+        console.log('GeoIP location data:', locationData);
+        
         // Record analytics data
         try {
             console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
@@ -108,38 +148,44 @@ async function handler(req, res) {
             if (process.env.MONGODB_URI) {
                 console.log('Raw query parameters:', req.query);
                 
-                const analyticsData = {
+                // Create raw analytics data
+                const rawData = {
                     handler: 'spelling',
                     query: req.query.query || req.query.partial_query || '[empty query]',
                     searchCollection: 'seattleu~sp-search',
                     userIp: userIp,
                     userAgent: req.headers['user-agent'],
                     referer: req.headers.referer,
-                    city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-                    region: req.headers['x-vercel-ip-country-region'],
-                    country: req.headers['x-vercel-ip-country'],
-                    timezone: req.headers['x-vercel-ip-timezone'],
-                    latitude: req.headers['x-vercel-ip-latitude'],
-                    longitude: req.headers['x-vercel-ip-longitude'],
+                    // Use GeoIP location data with Vercel's data as fallback
+                    city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+                    region: locationData.region || req.headers['x-vercel-ip-country-region'],
+                    country: locationData.country || req.headers['x-vercel-ip-country'],
+                    timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
+                    latitude: locationData.latitude || req.headers['x-vercel-ip-latitude'],
+                    longitude: locationData.longitude || req.headers['x-vercel-ip-longitude'],
                     responseTime: processingTime,
                     resultCount: suggestions.length,
+                    hasResults: suggestions.length > 0,
                     isProgramTab: Boolean(req.query['f.Tabs|programMain']),
                     isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
                     tabs: [],
+                    sessionId: sessionId,
                     // Additional spelling-specific data
                     hasSuggestions: suggestions.length > 0,
                     suggestions: suggestions,
-                    timestamp: new Date()
+                    timestamp: new Date(),
+                    clickedResults: [] // Initialize empty array to ensure field exists
                 };
                 
                 // Add tabs information
-                if (analyticsData.isProgramTab) analyticsData.tabs.push('program-main');
-                if (analyticsData.isStaffTab) analyticsData.tabs.push('Faculty & Staff');
+                if (rawData.isProgramTab) rawData.tabs.push('program-main');
+                if (rawData.isStaffTab) rawData.tabs.push('Faculty & Staff');
                 
-                // Log analytics data (excluding sensitive info)
-                const loggableData = { ...analyticsData };
-                delete loggableData.userIp;
-                console.log('Analytics data prepared for recording:', loggableData);
+                // Standardize data to ensure consistent schema
+                const analyticsData = createStandardAnalyticsData(rawData);
+                
+                // Log data (excluding sensitive information)
+                logAnalyticsData(analyticsData, 'spelling recording');
                 
                 // Record the analytics
                 try {
