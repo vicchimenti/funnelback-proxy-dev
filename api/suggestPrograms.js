@@ -15,16 +15,24 @@
  * - Structured JSON logging with proper query tracking
  * - Request/Response tracking with detailed headers
  * - Comprehensive error handling
- * - Analytics integration
+ * - Enhanced analytics with GeoIP integration
+ * - Session tracking
  * 
  * @author Victor Chimenti
- * @version 2.0.2
+ * @version 3.1.0
  * @license MIT
+ * @lastModified 2025-03-15
  */
 
 const axios = require('axios');
 const os = require('os');
+const { getLocationData } = require('../lib/geoIpService');
 const { recordQuery } = require('../lib/queryAnalytics');
+const { 
+    createStandardAnalyticsData, 
+    sanitizeSessionId, 
+    logAnalyticsData 
+} = require('../lib/schemaHandler');
 
 /**
  * Cleans program titles by removing HTML tags and selecting first pipe-separated value
@@ -103,7 +111,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-programs',
-        version: '2.0.2',
+        version: '3.1.0',
         timestamp: new Date().toISOString(),
         level,
         message,
@@ -172,7 +180,22 @@ function logEvent(level, message, data = {}) {
 async function handler(req, res) {
     const startTime = Date.now();
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
-    const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    
+    // Get client IP from custom header or fallback methods
+    const userIp = req.headers['x-original-client-ip'] || 
+               (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
+               (req.headers['x-real-ip']) || 
+               req.socket.remoteAddress;
+
+    // Add debug logging
+    console.log('IP Headers:', {
+        originalClientIp: req.headers['x-original-client-ip'],
+        forwardedFor: req.headers['x-forwarded-for'],
+        realIp: req.headers['x-real-ip'],
+        socketRemote: req.socket.remoteAddress,
+        vercelIpCity: req.headers['x-vercel-ip-city'],
+        finalUserIp: userIp
+    });
 
     const query = { 
         ...req.query, 
@@ -251,6 +274,22 @@ async function handler(req, res) {
             }))
         };
 
+        // Extract and sanitize session ID
+        const sessionId = sanitizeSessionId(req.query.sessionId || req.headers['x-session-id']);
+        console.log('Extracted session ID:', sessionId);
+
+        // Add detailed session ID debugging
+        console.log('Session ID sources:', {
+            fromQueryParam: req.query.sessionId,
+            fromHeader: req.headers['x-session-id'],
+            fromBody: req.body?.sessionId,
+            afterSanitization: sessionId
+        });
+        
+        // Get location data based on the user's IP
+        const locationData = await getLocationData(userIp);
+        console.log('GeoIP location data:', locationData);
+
         // Record analytics data
         try {
             console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
@@ -258,30 +297,37 @@ async function handler(req, res) {
             if (process.env.MONGODB_URI) {
                 console.log('Raw query parameters:', req.query);
                 
-                const analyticsData = {
+                // Create raw analytics data
+                const rawData = {
                     handler: 'suggestPrograms',
                     query: req.query.query || '[empty query]',
                     searchCollection: 'seattleu~ds-programs',
                     userIp: userIp,
                     userAgent: req.headers['user-agent'],
                     referer: req.headers.referer,
-                    city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-                    region: req.headers['x-vercel-ip-country-region'],
-                    country: req.headers['x-vercel-ip-country'],
-                    timezone: req.headers['x-vercel-ip-timezone'],
-                    latitude: req.headers['x-vercel-ip-latitude'],
-                    longitude: req.headers['x-vercel-ip-longitude'],
+                    // Use GeoIP location data with Vercel's data as fallback
+                    city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+                    region: locationData.region || req.headers['x-vercel-ip-country-region'],
+                    country: locationData.country || req.headers['x-vercel-ip-country'],
+                    timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
+                    latitude: locationData.latitude || req.headers['x-vercel-ip-latitude'],
+                    longitude: locationData.longitude || req.headers['x-vercel-ip-longitude'],
                     responseTime: processingTime,
                     resultCount: resultCount,
+                    hasResults: resultCount > 0,
                     isProgramTab: true,  // This is specifically for program searches
+                    isStaffTab: false,
                     tabs: ['program-main'],
-                    timestamp: new Date()
+                    sessionId: sessionId,
+                    timestamp: new Date(),
+                    clickedResults: [] // Initialize empty array to ensure field exists
                 };
                 
-                // Log analytics data (excluding sensitive info)
-                const loggableData = { ...analyticsData };
-                delete loggableData.userIp;
-                console.log('Analytics data prepared for recording:', loggableData);
+                // Standardize data to ensure consistent schema
+                const analyticsData = createStandardAnalyticsData(rawData);
+                
+                // Log data (excluding sensitive information)
+                logAnalyticsData(analyticsData, 'suggestPrograms recording');
                 
                 // Record the analytics
                 try {
