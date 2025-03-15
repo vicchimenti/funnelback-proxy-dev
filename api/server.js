@@ -20,6 +20,7 @@
  */
 
 const axios = require('axios');
+const { getLocationData } = require('../lib/geoIpService');
 const { recordQuery } = require('../lib/queryAnalytics');
 const { 
     createStandardAnalyticsData, 
@@ -58,13 +59,17 @@ function extractResultCount(htmlContent) {
  */
 async function handler(req, res) {
     const startTime = Date.now();
-    // Enable CORS for Seattle University domain
+
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    const userIp = req.headers['x-original-client-ip'] || 
+    (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
+    (req.headers['x-real-ip']) || 
+    req.socket.remoteAddress;
 
     // Log request details
-    const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     console.log('Main Search Request:');
     console.log('- User IP:', userIp);
     console.log('- Query Parameters:', req.query);
@@ -110,8 +115,15 @@ async function handler(req, res) {
             
             if (process.env.MONGODB_URI) {
                 // Extract and sanitize session ID
-                const sessionId = sanitizeSessionId(req.query.sessionId);
-                console.log('Extracted session ID:', sessionId);
+                const sessionId = sanitizeSessionId(req.query.sessionId || req.headers['x-session-id']);
+                console.log('Session ID sources:', {
+                    fromQueryParam: req.query.sessionId,
+                    fromHeader: req.headers['x-session-id'],
+                    fromBody: req.body?.sessionId,
+                    afterSanitization: sessionId
+                });
+
+                const locationData = await getLocationData(userIp);
                 
                 // Create raw analytics data
                 const rawData = {
@@ -121,12 +133,12 @@ async function handler(req, res) {
                     userIp: userIp,
                     userAgent: req.headers['user-agent'],
                     referer: req.headers.referer,
-                    city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-                    region: req.headers['x-vercel-ip-country-region'],
-                    country: req.headers['x-vercel-ip-country'],
-                    timezone: req.headers['x-vercel-ip-timezone'],
-                    latitude: req.headers['x-vercel-ip-latitude'],
-                    longitude: req.headers['x-vercel-ip-longitude'],
+                    city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+                    region: locationData.region || req.headers['x-vercel-ip-country-region'],
+                    country: locationData.country || req.headers['x-vercel-ip-country'],
+                    timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
+                    latitude: locationData.latitude || req.headers['x-vercel-ip-latitude'],
+                    longitude: locationData.longitude || req.headers['x-vercel-ip-longitude'],
                     responseTime: processingTime,
                     resultCount: resultCount,
                     hasResults: resultCount > 0,
