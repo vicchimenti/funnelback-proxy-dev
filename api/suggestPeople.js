@@ -15,7 +15,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 3.1.0
+ * @version 3.1.1
  * @license MIT
  */
 
@@ -23,6 +23,11 @@ const axios = require('axios');
 const os = require('os');
 const { getLocationData } = require('../lib/geoIpService');
 const { recordQuery } = require('../lib/queryAnalytics');
+const { 
+    createStandardAnalyticsData, 
+    sanitizeSessionId, 
+    logAnalyticsData 
+} = require('../lib/schemaHandler');  
 
 /**
  * Creates a standardized log entry for Vercel environment
@@ -209,7 +214,7 @@ async function handler(req, res) {
             if (process.env.MONGODB_URI) {
                 console.log('Raw query parameters:', req.query);
                 
-                const analyticsData = {
+                const rawData = {
                     handler: 'suggestPeople',
                     query: req.query.query || '[empty query]',
                     searchCollection: 'seattleu~sp-search',
@@ -226,13 +231,15 @@ async function handler(req, res) {
                     resultCount: resultCount,
                     isStaffTab: true,  // This is specifically for staff searches
                     tabs: ['Faculty & Staff'],
+                    sessionId: sessionId,
                     timestamp: new Date()
                 };
                 
-                // Log analytics data (excluding sensitive info)
-                const loggableData = { ...analyticsData };
-                delete loggableData.userIp;
-                console.log('Analytics data prepared for recording:', loggableData);
+                // Standardize data to ensure consistent schema
+                const analyticsData = createStandardAnalyticsData(rawData);
+                
+                // Log data (excluding sensitive information)
+                logAnalyticsData(analyticsData, 'suggestPeople recording');
                 
                 // Record the analytics
                 try {
