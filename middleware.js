@@ -110,6 +110,10 @@ export default async function middleware(request) {
   // Preserve any sessionId in the URL parameters
   if (url.searchParams.has('sessionId')) {
     requestHeaders.set('x-session-id', url.searchParams.get('sessionId'));
+  } else if (!url.searchParams.has('sessionId')) {
+    // Generate a unique session ID if one doesn't exist
+    const generatedSessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;    
+    requestHeaders.set('x-session-id', generatedSessionId);
   }
   
   // Create a new request with modified headers
