@@ -1,8 +1,58 @@
-// middleware.js
+/**
+ * @fileoverview Edge Middleware for Funnelback Search Integration
+ * 
+ * This middleware intercepts requests before they reach the API handlers and
+ * provides critical infrastructure-level functionality:
+ * 
+ * - Rate limiting to prevent abuse and DDoS attacks
+ * - IP address preservation for accurate analytics
+ * - Session ID generation and tracking
+ * - Request header augmentation
+ * 
+ * The middleware uses different rate limits for different endpoint types,
+ * with higher limits for suggestion endpoints that are called during typing
+ * and lower limits for admin dashboard functions. It preserves the original
+ * client IP in a custom header and ensures every request has a session ID
+ * either from URL parameters or by generating a new one.
+ * 
+ * For security and scalability reasons, all rate limiting is performed
+ * at the edge before requests reach serverless functions.
+ * 
+ * @author Victor Chimenti
+ * @version 2.0.0
+ * @environment development
+ * @status in-progress
+ * @lastModified 2025-03-16
+ * @module middleware
+ * @license MIT
+ */
+
+/**
+ * In-memory cache mapping IP addresses to their rate limiting data
+ * @type {Map<string, Object>}
+ * @private
+ */
 const ipCache = new Map();
+
+/**
+ * Time window for rate limiting in milliseconds
+ * @type {number}
+ * @constant
+ * @private
+ */
 const WINDOW_MS = 60 * 1000; // 1 minute
 
-// Different rate limits for different endpoint types
+/**
+ * Rate limits for different endpoint types (requests per minute)
+ * @type {Object}
+ * @property {number} search - Limit for search endpoints
+ * @property {number} suggest - Limit for suggestion endpoints (higher to support typing)
+ * @property {number} analytics - Limit for analytics collection endpoints
+ * @property {number} dashboard - Limit for admin dashboard endpoints
+ * @property {number} default - Default limit for all other endpoints
+ * @constant
+ * @private
+ */
 const LIMITS = {
   search: 30,     // Search endpoints
   suggest: 60,    // Suggestion endpoints (higher limit for typing)
@@ -11,7 +61,14 @@ const LIMITS = {
   default: 30     // Default for any other endpoints
 };
 
-// We'll manually clean the cache after each request
+/**
+ * Cleans up expired entries from the IP cache
+ * This helps prevent memory leaks in long-running edge functions
+ * 
+ * @private
+ * @function
+ * @returns {void}
+ */
 function cleanupCache() {
   const now = Date.now();
   for (const [key, value] of ipCache.entries()) {
@@ -21,6 +78,12 @@ function cleanupCache() {
   }
 }
 
+/**
+ * Middleware function that processes requests at the edge
+ * 
+ * @param {Request} request - The incoming request object
+ * @returns {Promise<Response>} The modified response
+ */
 export default async function middleware(request) {
   // Clean up expired entries
   cleanupCache();
@@ -139,7 +202,13 @@ export default async function middleware(request) {
   return newResponse;
 }
 
-// Configure which paths to apply the middleware to
+/**
+ * Configuration for which paths the middleware should apply to
+ * Uses Vercel's matcher syntax to specify path patterns
+ * 
+ * @type {Object}
+ * @property {Array<string>} matcher - Array of path patterns to match
+ */
 export const config = {
   matcher: [
     // All API endpoints
