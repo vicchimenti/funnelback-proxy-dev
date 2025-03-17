@@ -14,9 +14,9 @@
  * - Session tracking
  * 
  * @author Victor Chimenti
- * @version 3.1.0
+ * @version 3.2.0
  * @license MIT
- * @lastModified 2025-03-15
+ * @lastModified 2025-03-16
  */
 
 const axios = require('axios');
@@ -87,12 +87,6 @@ async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Log request details
-    console.log('Spelling Request:');
-    console.log('- User IP:', userIp);
-    console.log('- Query Parameters:', req.query);
-    console.log('- Request Headers:', req.headers);
-
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
@@ -111,12 +105,25 @@ async function handler(req, res) {
         console.log('Making Funnelback spelling request:');
         console.log('- URL:', `${funnelbackUrl}?${params.toString()}`);
 
+        // Get location data based on the user's IP
+        const locationData = await getLocationData(userIp);
+        console.log('GeoIP location data:', locationData);
+
+        const funnelbackHeaders = {
+            'Accept': 'text/html',
+            'X-Forwarded-For': userIp,
+            'X-Geo-City': locationData.city,
+            'X-Geo-Region': locationData.region,
+            'X-Geo-Country': locationData.country,
+            'X-Geo-Timezone': locationData.timezone,
+            'X-Geo-Latitude': locationData.latitude,
+            'X-Geo-Longitude': locationData.longitude
+        };
+        console.log('- Outgoing Headers to Funnelback:', funnelbackHeaders);
+
         const response = await axios.get(funnelbackUrl, {
             params: params,
-            headers: {
-                'Accept': 'text/html',
-                'X-Forwarded-For': userIp
-            }
+            headers: funnelbackHeaders
         });
 
         console.log('Spelling response received successfully');
@@ -137,10 +144,6 @@ async function handler(req, res) {
             afterSanitization: sessionId
         });
         
-        // Get location data based on the user's IP
-        const locationData = await getLocationData(userIp);
-        console.log('GeoIP location data:', locationData);
-        
         // Record analytics data
         try {
             console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
@@ -156,7 +159,6 @@ async function handler(req, res) {
                     userIp: userIp,
                     userAgent: req.headers['user-agent'],
                     referer: req.headers.referer,
-                    // Use GeoIP location data with Vercel's data as fallback
                     city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
                     region: locationData.region || req.headers['x-vercel-ip-country-region'],
                     country: locationData.country || req.headers['x-vercel-ip-country'],

@@ -14,7 +14,7 @@
  * - Consistent schema handling
  * 
  * @author Victor Chimenti
- * @version 3.1.0
+ * @version 3.2.0
  * @license MIT
  * @lastModified 2025-03-16
  */
@@ -125,8 +125,6 @@ async function handler(req, res) {
                     afterSanitization: sessionId
                 });
 
-                const locationData = await getLocationData(userIp);
-                
                 // Create raw analytics data
                 const rawData = {
                     handler: 'server',
