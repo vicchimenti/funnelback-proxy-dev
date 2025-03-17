@@ -15,7 +15,7 @@
  * 
  * @author Victor Chimenti
  * @namespace searchHandler
- * @version 3.4.1
+ * @version 3.4.2
  * @license MIT
  * @lastModified 2025-03-16
  */
@@ -83,12 +83,6 @@ async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Log request details
-    console.log('Search Request:');
-    console.log('- User IP:', userIp);
-    console.log('- Query Parameters:', req.query);
-    console.log('- Request Headers:', req.headers);
-
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
@@ -111,7 +105,7 @@ async function handler(req, res) {
             'X-Geo-Latitude': locationData.latitude,
             'X-Geo-Longitude': locationData.longitude
         };
-        console.log('- Outgoing Headers to Funnelback:', funnelbackHeaders);
+        console.log('- Outgoing Headers to Funnelback (with actual user location):', funnelbackHeaders);
 
         const response = await axios.get(funnelbackUrl, {
             params: req.query,
