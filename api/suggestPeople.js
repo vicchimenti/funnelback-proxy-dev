@@ -194,6 +194,10 @@ async function handler(req, res) {
             headers: funnelbackHeaders
         });
 
+        console.log('DEBUG - Response status:', response.status);
+        console.log('DEBUG - Response data type:', response.data?.response?.resultPacket?.results ? 'Has results' : 'No results');
+        console.log('DEBUG - Number of results:', response.data?.response?.resultPacket?.results?.length || 0);
+
         // Get result count for analytics
         const resultCount = response.data?.response?.resultPacket?.results?.length || 0;
         const processingTime = Date.now() - startTime;
