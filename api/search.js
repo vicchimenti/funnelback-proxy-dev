@@ -15,7 +15,7 @@
  * 
  * @author Victor Chimenti
  * @namespace searchHandler
- * @version 3.4.0
+ * @version 3.4.1
  * @license MIT
  * @lastModified 2025-03-16
  */
@@ -97,27 +97,40 @@ async function handler(req, res) {
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
 
-        console.log('Making Funnelback search request:');
-        console.log('- URL:', funnelbackUrl);
-        console.log('- Parameters:', req.query);
-
         // Get location data based on the user's IP
         const locationData = await getLocationData(userIp);
         console.log('GeoIP location data:', locationData);
 
+        const funnelbackHeaders = {
+            'Accept': 'text/html',
+            'X-Forwarded-For': userIp,
+            'X-Geo-City': locationData.city,
+            'X-Geo-Region': locationData.region,
+            'X-Geo-Country': locationData.country,
+            'X-Geo-Timezone': locationData.timezone,
+            'X-Geo-Latitude': locationData.latitude,
+            'X-Geo-Longitude': locationData.longitude
+        };
+        console.log('- Outgoing Headers to Funnelback:', funnelbackHeaders);
+
         const response = await axios.get(funnelbackUrl, {
             params: req.query,
-            headers: {
-                'Accept': 'text/html',
-                'X-Forwarded-For': userIp,
-                'X-Geo-City': locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-                'X-Geo-Region': locationData.region || req.headers['x-vercel-ip-country-region'],
-                'X-Geo-Country': locationData.country || req.headers['x-vercel-ip-country'],
-                'X-Geo-Timezone': locationData.timezone || req.headers['x-vercel-ip-timezone'],
-                'X-Geo-Latitude': locationData.latitude || req.headers['x-vercel-ip-latitude'],
-                'X-Geo-Longitude': locationData.longitude || req.headers['x-vercel-ip-longitude']
-            }
+            headers: funnelbackHeaders
         });
+
+        // const response = await axios.get(funnelbackUrl, {
+        //     params: req.query,
+        //     headers: {
+        //         'Accept': 'text/html',
+        //         'X-Forwarded-For': userIp,
+        //         'X-Geo-City': locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+        //         'X-Geo-Region': locationData.region || req.headers['x-vercel-ip-country-region'],
+        //         'X-Geo-Country': locationData.country || req.headers['x-vercel-ip-country'],
+        //         'X-Geo-Timezone': locationData.timezone || req.headers['x-vercel-ip-timezone'],
+        //         'X-Geo-Latitude': locationData.latitude || req.headers['x-vercel-ip-latitude'],
+        //         'X-Geo-Longitude': locationData.longitude || req.headers['x-vercel-ip-longitude']
+        //     }
+        // });
 
         // const response = await axios.get(funnelbackUrl, {
         //     params: req.query,
@@ -162,7 +175,6 @@ async function handler(req, res) {
                     userIp: userIp,
                     userAgent: req.headers['user-agent'],
                     referer: req.headers.referer,
-                    // Use GeoIP location data with Vercel's data as fallback
                     city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
                     region: locationData.region || req.headers['x-vercel-ip-country-region'],
                     country: locationData.country || req.headers['x-vercel-ip-country'],
@@ -177,7 +189,7 @@ async function handler(req, res) {
                     tabs: [],
                     sessionId: sessionId,
                     timestamp: new Date(),
-                    clickedResults: [] // Initialize empty array to ensure field exists
+                    clickedResults: []
                 };
                 
                 // Add tabs information
