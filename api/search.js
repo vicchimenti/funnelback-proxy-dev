@@ -15,7 +15,7 @@
  * 
  * @author Victor Chimenti
  * @namespace searchHandler
- * @version 3.4.2
+ * @version 3.4.4
  * @license MIT
  * @lastModified 2025-03-16
  */
@@ -111,28 +111,6 @@ async function handler(req, res) {
             params: req.query,
             headers: funnelbackHeaders
         });
-
-        // const response = await axios.get(funnelbackUrl, {
-        //     params: req.query,
-        //     headers: {
-        //         'Accept': 'text/html',
-        //         'X-Forwarded-For': userIp,
-        //         'X-Geo-City': locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-        //         'X-Geo-Region': locationData.region || req.headers['x-vercel-ip-country-region'],
-        //         'X-Geo-Country': locationData.country || req.headers['x-vercel-ip-country'],
-        //         'X-Geo-Timezone': locationData.timezone || req.headers['x-vercel-ip-timezone'],
-        //         'X-Geo-Latitude': locationData.latitude || req.headers['x-vercel-ip-latitude'],
-        //         'X-Geo-Longitude': locationData.longitude || req.headers['x-vercel-ip-longitude']
-        //     }
-        // });
-
-        // const response = await axios.get(funnelbackUrl, {
-        //     params: req.query,
-        //     headers: {
-        //         'Accept': 'text/html',
-        //         'X-Forwarded-For': userIp
-        //     }
-        // });
 
         console.log('Search response received successfully');
         
