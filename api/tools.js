@@ -14,9 +14,9 @@
  * - Session tracking
  * 
  * @author Victor Chimenti
- * @version 3.1.0
+ * @version 3.2.0
  * @license MIT
- * @lastModified 2025-03-15
+ * @lastModified 2025-03-17
  */
 
 const axios = require('axios');
@@ -80,12 +80,25 @@ async function handler(req, res) {
         console.log('- Base URL:', funnelbackUrl);
         console.log('- Tool Path:', toolPath);
 
+        // Get location data based on the user's IP
+        const locationData = await getLocationData(userIp);
+        console.log('GeoIP location data:', locationData);
+
+        const funnelbackHeaders = {
+            'Accept': 'text/html',
+            'X-Forwarded-For': userIp,
+            'X-Geo-City': locationData.city,
+            'X-Geo-Region': locationData.region,
+            'X-Geo-Country': locationData.country,
+            'X-Geo-Timezone': locationData.timezone,
+            'X-Geo-Latitude': locationData.latitude,
+            'X-Geo-Longitude': locationData.longitude
+        };
+        console.log('- Outgoing Headers to Funnelback:', funnelbackHeaders);
+
         const response = await axios.get(`${funnelbackUrl}/${toolPath}`, {
             params: req.query,
-            headers: {
-                'Accept': 'text/html',
-                'X-Forwarded-For': userIp
-            }
+            headers: funnelbackHeaders
         });
 
         console.log('Tools response received successfully');
@@ -104,10 +117,6 @@ async function handler(req, res) {
             fromBody: req.body?.sessionId,
             afterSanitization: sessionId
         });
-        
-        // Get location data based on the user's IP
-        const locationData = await getLocationData(userIp);
-        console.log('GeoIP location data:', locationData);
         
         // Record analytics data
         try {
