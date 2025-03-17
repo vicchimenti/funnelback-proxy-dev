@@ -14,9 +14,9 @@
  * - Consistent schema handling
  * 
  * @author Victor Chimenti
- * @version 3.0.1
+ * @version 3.1.0
  * @license MIT
- * @lastModified 2025-03-06
+ * @lastModified 2025-03-16
  */
 
 const axios = require('axios');
@@ -69,12 +69,6 @@ async function handler(req, res) {
     (req.headers['x-real-ip']) || 
     req.socket.remoteAddress;
 
-    // Log request details
-    console.log('Main Search Request:');
-    console.log('- User IP:', userIp);
-    console.log('- Query Parameters:', req.query);
-    console.log('- Request Headers:', req.headers);
-
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
@@ -91,16 +85,24 @@ async function handler(req, res) {
             ...req.query
         };
 
-        console.log('Making Funnelback request:');
-        console.log('- URL:', funnelbackUrl);
-        console.log('- Parameters:', params);
+        const locationData = await getLocationData(userIp);
+        console.log('GeoIP location data:', locationData);
+
+        const funnelbackHeaders = {
+            'Accept': 'text/html',
+            'X-Forwarded-For': userIp,
+            'X-Geo-City': locationData.city,
+            'X-Geo-Region': locationData.region,
+            'X-Geo-Country': locationData.country,
+            'X-Geo-Timezone': locationData.timezone,
+            'X-Geo-Latitude': locationData.latitude,
+            'X-Geo-Longitude': locationData.longitude
+        };
+        console.log('- Outgoing Headers to Funnelback (with actual user location):', funnelbackHeaders);
 
         const response = await axios.get(funnelbackUrl, {
             params: params,
-            headers: {
-                'Accept': 'text/html',
-                'X-Forwarded-For': userIp
-            }
+            headers: funnelbackHeaders
         });
 
         console.log('Funnelback response received successfully');
