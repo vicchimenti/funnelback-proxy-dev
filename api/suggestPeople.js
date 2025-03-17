@@ -15,7 +15,8 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 3.1.1
+ * @version 3.2.0
+ * @lastmodified 2025-03-16
  * @license MIT
  */
 
@@ -137,6 +138,9 @@ async function handler(req, res) {
         return;
     }
 
+    const locationData = await getLocationData(userIp);
+    console.log('GeoIP location data:', locationData);
+
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
         
@@ -173,15 +177,22 @@ async function handler(req, res) {
         });
 
         console.log('DEBUG - Making request to Funnelback with URL:', url);
+
+        const funnelbackHeaders = {
+            'Accept': 'text/html',
+            'X-Forwarded-For': userIp,
+            'X-Geo-City': locationData.city,
+            'X-Geo-Region': locationData.region,
+            'X-Geo-Country': locationData.country,
+            'X-Geo-Timezone': locationData.timezone,
+            'X-Geo-Latitude': locationData.latitude,
+            'X-Geo-Longitude': locationData.longitude
+        };
+        console.log('- Outgoing Headers to Funnelback:', funnelbackHeaders);
+
         const response = await axios.get(url, {
-            headers: {
-                'Accept': 'application/json',
-                'X-Forwarded-For': userIp
-            }
+            headers: funnelbackHeaders
         });
-        console.log('DEBUG - Response status:', response.status);
-        console.log('DEBUG - Response data type:', response.data?.response?.resultPacket?.results ? 'Has results' : 'No results');
-        console.log('DEBUG - Number of results:', response.data?.response?.resultPacket?.results?.length || 0);
 
         // Get result count for analytics
         const resultCount = response.data?.response?.resultPacket?.results?.length || 0;
@@ -205,7 +216,7 @@ async function handler(req, res) {
             afterSanitization: sessionId
         });
 
-        const locationData = await getLocationData(userIp);
+
 
         // Record analytics data
         try {
