@@ -14,9 +14,10 @@
  * - GeoIP-based location tracking
  * 
  * @author Victor Chimenti
- * @version 3.3.0
+ * @namespace searchHandler
+ * @version 3.4.0
  * @license MIT
- * @lastModified 2025-03-13
+ * @lastModified 2025-03-16
  */
 
 const axios = require('axios');
@@ -100,13 +101,31 @@ async function handler(req, res) {
         console.log('- URL:', funnelbackUrl);
         console.log('- Parameters:', req.query);
 
+        // Get location data based on the user's IP
+        const locationData = await getLocationData(userIp);
+        console.log('GeoIP location data:', locationData);
+
         const response = await axios.get(funnelbackUrl, {
             params: req.query,
             headers: {
                 'Accept': 'text/html',
-                'X-Forwarded-For': userIp
+                'X-Forwarded-For': userIp,
+                'X-Geo-City': locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+                'X-Geo-Region': locationData.region || req.headers['x-vercel-ip-country-region'],
+                'X-Geo-Country': locationData.country || req.headers['x-vercel-ip-country'],
+                'X-Geo-Timezone': locationData.timezone || req.headers['x-vercel-ip-timezone'],
+                'X-Geo-Latitude': locationData.latitude || req.headers['x-vercel-ip-latitude'],
+                'X-Geo-Longitude': locationData.longitude || req.headers['x-vercel-ip-longitude']
             }
         });
+
+        // const response = await axios.get(funnelbackUrl, {
+        //     params: req.query,
+        //     headers: {
+        //         'Accept': 'text/html',
+        //         'X-Forwarded-For': userIp
+        //     }
+        // });
 
         console.log('Search response received successfully');
         
@@ -134,10 +153,6 @@ async function handler(req, res) {
                     fromBody: req.body?.sessionId,
                     afterSanitization: sessionId
                 });
-                
-                // Get location data based on the user's IP
-                const locationData = await getLocationData(userIp);
-                console.log('GeoIP location data:', locationData);
                 
                 // Create raw analytics data
                 const rawData = {
