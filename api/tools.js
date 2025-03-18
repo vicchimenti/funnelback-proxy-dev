@@ -14,9 +14,10 @@
  * - Session tracking
  * 
  * @author Victor Chimenti
- * @version 3.2.0
+ * @version 4.1.0
+ * @namespace toolsHandler
  * @license MIT
- * @lastModified 2025-03-17
+ * @lastModified 2025-03-18
  */
 
 const axios = require('axios');
@@ -90,9 +91,7 @@ async function handler(req, res) {
             'X-Geo-City': locationData.city,
             'X-Geo-Region': locationData.region,
             'X-Geo-Country': locationData.country,
-            'X-Geo-Timezone': locationData.timezone,
-            'X-Geo-Latitude': locationData.latitude,
-            'X-Geo-Longitude': locationData.longitude
+            'X-Geo-Timezone': locationData.timezone
         };
         console.log('- Outgoing Headers to Funnelback:', funnelbackHeaders);
 
@@ -130,16 +129,12 @@ async function handler(req, res) {
                     handler: 'tools',
                     query: req.query.query || req.query.partial_query || '[empty query]',
                     searchCollection: req.query.collection || 'seattleu~sp-search',
-                    userIp: userIp,
                     userAgent: req.headers['user-agent'],
                     referer: req.headers.referer,
-                    // Use GeoIP location data with Vercel's data as fallback
                     city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
                     region: locationData.region || req.headers['x-vercel-ip-country-region'],
                     country: locationData.country || req.headers['x-vercel-ip-country'],
                     timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
-                    latitude: locationData.latitude || req.headers['x-vercel-ip-latitude'],
-                    longitude: locationData.longitude || req.headers['x-vercel-ip-longitude'],
                     responseTime: processingTime,
                     resultCount: 0, // Can't easily extract this from tools responses
                     hasResults: false, // Default for tools endpoints

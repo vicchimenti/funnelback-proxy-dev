@@ -15,8 +15,9 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 3.2.0
- * @lastmodified 2025-03-16
+ * @version 4.1.0
+ * @namespace suggestPeople
+ * @lastmodified 2025-03-18
  * @license MIT
  */
 
@@ -82,7 +83,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '3.0.2',
+        logVersion: '4.1.0',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -184,9 +185,7 @@ async function handler(req, res) {
             'X-Geo-City': locationData.city,
             'X-Geo-Region': locationData.region,
             'X-Geo-Country': locationData.country,
-            'X-Geo-Timezone': locationData.timezone,
-            'X-Geo-Latitude': locationData.latitude,
-            'X-Geo-Longitude': locationData.longitude
+            'X-Geo-Timezone': locationData.timezone
         };
         console.log('- Outgoing Headers to Funnelback:', funnelbackHeaders);
 
@@ -233,15 +232,12 @@ async function handler(req, res) {
                     handler: 'suggestPeople',
                     query: req.query.query || '[empty query]',
                     searchCollection: 'seattleu~sp-search',
-                    userIp: userIp,
                     userAgent: req.headers['user-agent'],
                     referer: req.headers.referer,
                     city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
                     region: locationData.region || req.headers['x-vercel-ip-country-region'],
                     country: locationData.country || req.headers['x-vercel-ip-country'],
                     timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
-                    latitude: locationData.latitude || req.headers['x-vercel-ip-latitude'],
-                    longitude: locationData.longitude || req.headers['x-vercel-ip-longitude'],
                     responseTime: processingTime,
                     resultCount: resultCount,
                     isStaffTab: true,  // This is specifically for staff searches

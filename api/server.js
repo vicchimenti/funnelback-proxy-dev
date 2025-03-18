@@ -14,9 +14,10 @@
  * - Consistent schema handling
  * 
  * @author Victor Chimenti
- * @version 3.2.0
+ * @version 4.1.0
+ * @namespace server default
  * @license MIT
- * @lastModified 2025-03-16
+ * @lastModified 2025-03-18
  */
 
 const axios = require('axios');
@@ -94,9 +95,7 @@ async function handler(req, res) {
             'X-Geo-City': locationData.city,
             'X-Geo-Region': locationData.region,
             'X-Geo-Country': locationData.country,
-            'X-Geo-Timezone': locationData.timezone,
-            'X-Geo-Latitude': locationData.latitude,
-            'X-Geo-Longitude': locationData.longitude
+            'X-Geo-Timezone': locationData.timezone
         };
         console.log('- Outgoing Headers to Funnelback (with actual user location):', funnelbackHeaders);
 
@@ -130,15 +129,12 @@ async function handler(req, res) {
                     handler: 'server',
                     query: req.query.query || req.query.partial_query || '[empty query]',
                     searchCollection: params.collection,
-                    userIp: userIp,
                     userAgent: req.headers['user-agent'],
                     referer: req.headers.referer,
                     city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
                     region: locationData.region || req.headers['x-vercel-ip-country-region'],
                     country: locationData.country || req.headers['x-vercel-ip-country'],
                     timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
-                    latitude: locationData.latitude || req.headers['x-vercel-ip-latitude'],
-                    longitude: locationData.longitude || req.headers['x-vercel-ip-longitude'],
                     responseTime: processingTime,
                     resultCount: resultCount,
                     hasResults: resultCount > 0,
