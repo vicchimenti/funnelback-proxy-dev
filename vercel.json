@@ -13,28 +13,10 @@
         { "source": "/proxy/analytics/clicks-batch", "destination": "/api/analytics/clicksBatch.js" },
         { "source": "/proxy/analytics/supplement", "destination": "/api/analytics/supplement.js" },
         { "source": "/proxy/analytics", "destination": "/api/analytics/supplement.js" },
-
-        { "source": "/api/analytics/summary", "destination": "/dashboard/api.js" },
-        { "source": "/api/analytics/trends", "destination": "/dashboard/api.js" },
-        { "source": "/api/analytics/handlers", "destination": "/dashboard/api.js" },
-        { "source": "/api/analytics/zero-results", "destination": "/dashboard/api.js" },
-        { "source": "/api/analytics/top-queries", "destination": "/dashboard/api.js" },
-        { "source": "/api/analytics/locations", "destination": "/dashboard/api.js" },
-        { "source": "/api/analytics/export", "destination": "/dashboard/api.js" },
         
         { "source": "/api/queryCount", "destination": "/api/queryCount.js" },
         { "source": "/api/mongoTest", "destination": "/api/mongoTest.js" },
-        { "source": "/api/testAnalytics", "destination": "/api/testAnalytics.js" },
-        
-        { "source": "/dashboard/static/(.*)", "destination": "/dashboard/frontend/build/static/$1" },
-        { "source": "/dashboard/manifest.json", "destination": "/dashboard/frontend/build/manifest.json" },
-        { "source": "/dashboard/favicon.ico", "destination": "/dashboard/frontend/build/favicon.ico" },
-        { "source": "/dashboard/logo192.png", "destination": "/dashboard/frontend/build/logo192.png" },
-        { "source": "/dashboard/logo512.png", "destination": "/dashboard/frontend/build/logo512.png" },
-        { "source": "/dashboard/asset-manifest.json", "destination": "/dashboard/frontend/build/asset-manifest.json" },
-        { "source": "/dashboard/robots.txt", "destination": "/dashboard/frontend/build/robots.txt" },
-        
-        { "source": "/dashboard(.*)", "destination": "/dashboard/frontend/build/index.html" }
+        { "source": "/api/testAnalytics", "destination": "/api/testAnalytics.js" }        
     ],
     "headers": [
         {
