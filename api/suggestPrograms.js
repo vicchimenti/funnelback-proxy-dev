@@ -21,7 +21,7 @@
  * - Session tracking
  * 
  * @author Victor Chimenti, Team
- * @version 4.2.5
+ * @version 4.2.6
  * @namespace suggestPrograms
  * @license MIT
  * @lastModified 2025-03-19
