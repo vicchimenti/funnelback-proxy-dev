@@ -325,7 +325,7 @@ async function handler(req, res) {
             const cachedData = await getCachedData('programs', req.query, requestId); // For suggestPrograms.js
             if (cachedData) {
                 cacheHit = true;
-                enrichedResponse = cachedData;
+                formattedResponse = cachedData;
                 
                 // Calculate processing time
                 const processingTime = Date.now() - startTime;
@@ -341,7 +341,7 @@ async function handler(req, res) {
                 });
                 
                 // Send cached response and continue with analytics recording
-                res.json(enrichedResponse);
+                res.json(formattedResults);
             }
         } catch (cacheError) {
             // Log cache error with standardized format
