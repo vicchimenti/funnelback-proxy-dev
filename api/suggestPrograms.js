@@ -21,7 +21,7 @@
  * - Session tracking
  * 
  * @author Victor Chimenti, Team
- * @version 4.2.3
+ * @version 4.2.4
  * @namespace suggestPrograms
  * @license MIT
  * @lastModified 2025-03-19
@@ -321,8 +321,7 @@ async function handler(req, res) {
     // Try to get data from cache first
     if (canUseCache) {
         try {
-            // Pass requestId to track cache operations through the request lifecycle
-            const cachedData = await getCachedData('programs', req.query, requestId); // For suggestPrograms.js
+            const cachedData = await getCachedData('programs', req.query, requestId);
             if (cachedData) {
                 cacheHit = true;
                 formattedResponse = cachedData;
@@ -330,29 +329,26 @@ async function handler(req, res) {
                 // Calculate processing time
                 const processingTime = Date.now() - startTime;
                 
-                // Log cache hit with standard event logging
-                logEvent('info', 'Cache hit for suggestions', {
+                // Log cache hit
+                logEvent('info', 'Cache hit for program suggestions', {
+                    query: query,
                     status: 200,
                     processingTime: `${processingTime}ms`,
-                    suggestionsCount: formattedResponse.length || 0,
-                    query: req.query,
+                    responseContent: formattedResponse,
                     headers: req.headers,
                     cacheHit: true
                 });
                 
-                // Send cached response and continue with analytics recording
-                res.json(formattedResults);
+                // Send cached response
+                res.setHeader('Content-Type', 'application/json');
+                res.send(formattedResponse);
+                
+                // Record analytics in background
+                recordQueryAnalytics(req, locationData, startTime, formattedResponse, true);
+                return; // Exit early since response already sent
             }
         } catch (cacheError) {
-            // Log cache error with standardized format
-            logCacheError('programs', null, {
-                requestId,
-                query: req.query,
-                errorType: cacheError.name,
-                errorMessage: cacheError.message
-            });
-            console.error('Cache error:', cacheError);
-            // Continue with normal request flow
+            console.error('Cache error in programs handler:', cacheError);
         }
     }
 
@@ -437,8 +433,24 @@ async function handler(req, res) {
         };
 
         // Store in cache if appropriate
-        if (canUseCache && formattedResponse.programs.length > 0) {
-            await setCachedData('programs', req.query, formattedResponse, requestId);
+        if (canUseCache && formattedResponse && formattedResponse.programs && formattedResponse.programs.length > 0) {
+            console.log(`DEBUG - Storing programs response in cache, program count: ${formattedResponse.programs.length}`);
+            
+            try {
+                // Log the exact parameters to help with debugging
+                console.log(`DEBUG - Programs cache key parameters:`, {
+                    endpoint: 'programs',
+                    query: req.query.query,
+                    collection: 'seattleu~ds-programs',
+                    profile: req.query.profile || '_default'
+                });
+                
+                // Use the 'programs' endpoint identifier to match retrieval
+                const cacheResult = await setCachedData('programs', req.query, formattedResponse, requestId);
+                console.log(`DEBUG - Programs cache set result: ${cacheResult}`);
+            } catch (cacheSetError) {
+                console.error('DEBUG - Error setting programs cache:', cacheSetError);
+            }
         }
         const processingTime = Date.now() - startTime;
 
