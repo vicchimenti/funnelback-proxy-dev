@@ -438,7 +438,7 @@ async function handler(req, res) {
 
         // Store in cache if appropriate
         if (canUseCache && enrichedResponse.length > 0) {
-            await setCachedData('suggestions', req.query, enrichedResponse, requestId);
+            await setCachedData('programs', req.query, enrichedResponse, requestId);
         }
         const processingTime = Date.now() - startTime;
 
