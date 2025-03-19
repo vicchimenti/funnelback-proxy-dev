@@ -362,6 +362,12 @@ async function handler(req, res) {
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
+
+        console.log('DEBUG - About to make Funnelback API request with params:', {
+            url: funnelbackUrl,
+            query: req.query,
+            userIp
+        });
         
         // Log the request
         logEvent('info', 'Programs search request received', {
@@ -387,6 +393,15 @@ async function handler(req, res) {
 
         // Log the actual URL we're hitting
         console.log('Funnelback URL:', `${funnelbackUrl}?${new URLSearchParams(query)}`);
+
+        console.log('DEBUG - Funnelback API response status:', response.status);
+        console.log('DEBUG - Funnelback API response data type:', typeof response.data);
+        console.log('DEBUG - Funnelback API response structure:', {
+            hasResponse: !!response.data?.response,
+            hasResultPacket: !!response.data?.response?.resultPacket,
+            hasResults: !!response.data?.response?.resultPacket?.results,
+            resultCount: response.data?.response?.resultPacket?.results?.length || 0
+        });
 
         // Log raw response structure for debugging
         console.log('Raw Response Path Check:', {
@@ -457,6 +472,16 @@ async function handler(req, res) {
             status: errorResponse.status,
             processingTime: `${Date.now() - startTime}ms`,
             headers: req.headers
+        });
+
+        console.error('DEBUG - Funnelback API request error details:', {
+            message: requestError.message,
+            stack: requestError.stack,
+            name: requestError.name,
+            isAxiosError: requestError.isAxiosError,
+            status: requestError.response?.status,
+            statusText: requestError.response?.statusText,
+            responseData: JSON.stringify(requestError.response?.data).substring(0, 500)
         });
         
         res.status(errorResponse.status).json(errorResponse);

@@ -285,6 +285,12 @@ async function handler(req, res) {
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
+
+        console.log('DEBUG - About to make Funnelback API request with params:', {
+            url: funnelbackUrl,
+            query: req.query,
+            userIp
+        });
         
         // Keep params for logging
         const params = new URLSearchParams();
@@ -337,6 +343,15 @@ async function handler(req, res) {
         console.log('DEBUG - Response status:', response.status);
         console.log('DEBUG - Response data type:', response.data?.response?.resultPacket?.results ? 'Has results' : 'No results');
         console.log('DEBUG - Number of results:', response.data?.response?.resultPacket?.results?.length || 0);
+
+        console.log('DEBUG - Funnelback API response status:', response.status);
+        console.log('DEBUG - Funnelback API response data type:', typeof response.data);
+        console.log('DEBUG - Funnelback API response structure:', {
+            hasResponse: !!response.data?.response,
+            hasResultPacket: !!response.data?.response?.resultPacket,
+            hasResults: !!response.data?.response?.resultPacket?.results,
+            resultCount: response.data?.response?.resultPacket?.results?.length || 0
+        });
 
         // Get result count for analytics
         const resultCount = response.data?.response?.resultPacket?.results?.length || 0;
@@ -399,6 +414,15 @@ async function handler(req, res) {
             processingTime: `${Date.now() - startTime}ms`,
             headers: req.headers
         });
+
+        console.error('DEBUG - Funnelback API request error details:', {
+            message: requestError.message,
+            stack: requestError.stack,
+            name: requestError.name,
+            isAxiosError: requestError.isAxiosError,
+            status: requestError.response?.status,
+            statusText: requestError.response?.statusText,
+            responseData: JSON.stringify(requestError.response?.data).substring(0, 500)});
         
         res.status(error.response?.status || 500).json({
             error: 'Error fetching results',
