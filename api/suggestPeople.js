@@ -246,7 +246,7 @@ async function handler(req, res) {
     if (canUseCache) {
         try {
             // Pass requestId to track cache operations through the request lifecycle
-            const cachedData = await getCachedData('suggestions', req.query, requestId);
+            const cachedData = await getCachedData('people', req.query, requestId); // For suggestPeople.js
             if (cachedData) {
                 cacheHit = true;
                 enrichedResponse = cachedData;
@@ -423,6 +423,7 @@ async function handler(req, res) {
             status: requestError.response?.status,
             statusText: requestError.response?.statusText,
             responseData: error.response?.data ? JSON.stringify(error.response.data).substring(0, 500) : null
+        });
         
         res.status(error.response?.status || 500).json({
             error: 'Error fetching results',
