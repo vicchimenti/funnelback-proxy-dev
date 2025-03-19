@@ -265,7 +265,7 @@ async function handler(req, res) {
                 });
                 
                 // Send cached response and continue with analytics recording
-                res.json(enrichedResponse);
+                res.json(formattedResults);
             }
         } catch (cacheError) {
             // Log cache error with standardized format
