@@ -269,7 +269,7 @@ async function handler(req, res) {
             }
         } catch (cacheError) {
             // Log cache error with standardized format
-            logCacheError('suggestions', null, {
+            logCacheError('people', null, {
                 requestId,
                 query: req.query,
                 errorType: cacheError.name,
