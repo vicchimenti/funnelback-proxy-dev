@@ -249,7 +249,7 @@ async function handler(req, res) {
             const cachedData = await getCachedData('people', req.query, requestId); // For suggestPeople.js
             if (cachedData) {
                 cacheHit = true;
-                enrichedResponse = cachedData;
+                formattedResults = cachedData;
                 
                 // Calculate processing time
                 const processingTime = Date.now() - startTime;
