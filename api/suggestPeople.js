@@ -17,7 +17,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti, Team
- * @version 4.2.1
+ * @version 4.2.2
  * @namespace suggestPeople
  * @lastmodified 2025-03-19
  * @license MIT
@@ -35,7 +35,10 @@ const {
 const { 
     getCachedData, 
     setCachedData, 
-    isCachingEnabled 
+    isCachingEnabled,
+    logCacheHit,
+    logCacheMiss,
+    logCacheError
 } = require('../lib/cacheService');
 
 /**
@@ -242,32 +245,36 @@ async function handler(req, res) {
     // Try to get data from cache first
     if (canUseCache) {
         try {
-            const cachedData = await getCachedData('people', req.query);
+            // Pass requestId to track cache operations through the request lifecycle
+            const cachedData = await getCachedData('suggestions', req.query, requestId);
             if (cachedData) {
                 cacheHit = true;
-                formattedResults = cachedData;
+                enrichedResponse = cachedData;
                 
-                // Log cache hit
+                // Calculate processing time
                 const processingTime = Date.now() - startTime;
-                logEvent('info', 'Cache hit for people suggestions', {
-                    query: req.query,
+                
+                // Log cache hit with standard event logging
+                logEvent('info', 'Cache hit for suggestions', {
                     status: 200,
                     processingTime: `${processingTime}ms`,
+                    suggestionsCount: enrichedResponse.length || 0,
+                    query: req.query,
                     headers: req.headers,
                     cacheHit: true
                 });
                 
-                // Send cached response
-                res.setHeader('Content-Type', 'application/json');
-                res.send(formattedResults);
-                
-                // Get location data and record analytics (in background)
-                const locationData = await getLocationData(userIp);
-                recordQueryAnalytics(req, locationData, startTime, formattedResults, true);
-                
-                return; // Exit early since response already sent
+                // Send cached response and continue with analytics recording
+                res.json(enrichedResponse);
             }
         } catch (cacheError) {
+            // Log cache error with standardized format
+            logCacheError('suggestions', null, {
+                requestId,
+                query: req.query,
+                errorType: cacheError.name,
+                errorMessage: cacheError.message
+            });
             console.error('Cache error:', cacheError);
             // Continue with normal request flow
         }
@@ -366,8 +373,8 @@ async function handler(req, res) {
         });
 
         // Store in cache if appropriate
-        if (canUseCache && formattedResults.length > 0) {
-            await setCachedData('people', req.query, formattedResults);
+        if (canUseCache && enrichedResponse.length > 0) {
+            await setCachedData('suggestions', req.query, enrichedResponse, requestId);
         }
 
         // Send response

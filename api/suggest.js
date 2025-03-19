@@ -18,7 +18,7 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.2.1
+* @version 4.2.2
 * @namespace suggestionHandler
 * @license MIT
 * @lastModified 2025-03-19
@@ -36,7 +36,10 @@ const {
 const { 
     getCachedData, 
     setCachedData, 
-    isCachingEnabled 
+    isCachingEnabled,
+    logCacheHit,
+    logCacheMiss,
+    logCacheError
 } = require('../lib/cacheService');
 
 /**
@@ -245,33 +248,43 @@ async function handler(req, res) {
    let cacheHit = false;
    let enrichedResponse = null;
    
-   // Try to get data from cache first
-   if (canUseCache) {
-       try {
-           const cachedData = await getCachedData('suggestions', req.query);
-           if (cachedData) {
-               cacheHit = true;
-               enrichedResponse = cachedData;
-               
-               // Log cache hit
-               const processingTime = Date.now() - startTime;
-               logEvent('info', 'Cache hit for suggestions', {
-                   status: 200,
-                   processingTime: `${processingTime}ms`,
-                   suggestionsCount: enrichedResponse.length || 0,
-                   query: req.query,
-                   headers: req.headers,
-                   cacheHit: true
-               });
-               
-               // Send cached response and continue with analytics recording
-               res.json(enrichedResponse);
-           }
-       } catch (cacheError) {
-           console.error('Cache error:', cacheError);
-           // Continue with normal request flow
-       }
-   }
+    // Try to get data from cache first
+    if (canUseCache) {
+        try {
+            // Pass requestId to track cache operations through the request lifecycle
+            const cachedData = await getCachedData('suggestions', req.query, requestId);
+            if (cachedData) {
+                cacheHit = true;
+                enrichedResponse = cachedData;
+                
+                // Calculate processing time
+                const processingTime = Date.now() - startTime;
+                
+                // Log cache hit with standard event logging
+                logEvent('info', 'Cache hit for suggestions', {
+                    status: 200,
+                    processingTime: `${processingTime}ms`,
+                    suggestionsCount: enrichedResponse.length || 0,
+                    query: req.query,
+                    headers: req.headers,
+                    cacheHit: true
+                });
+                
+                // Send cached response and continue with analytics recording
+                res.json(enrichedResponse);
+            }
+        } catch (cacheError) {
+            // Log cache error with standardized format
+            logCacheError('suggestions', null, {
+                requestId,
+                query: req.query,
+                errorType: cacheError.name,
+                errorMessage: cacheError.message
+            });
+            console.error('Cache error:', cacheError);
+            // Continue with normal request flow
+        }
+    }
 
    // If we got a cache hit, we only need to record analytics
    if (cacheHit) {
@@ -309,7 +322,7 @@ async function handler(req, res) {
 
         // Store in cache if appropriate
         if (canUseCache && enrichedResponse.length > 0) {
-            await setCachedData('suggestions', req.query, enrichedResponse);
+            await setCachedData('suggestions', req.query, enrichedResponse, requestId);
         }
 
         // Process time for this request
