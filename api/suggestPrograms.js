@@ -481,7 +481,7 @@ async function handler(req, res) {
             isAxiosError: requestError.isAxiosError,
             status: requestError.response?.status,
             statusText: requestError.response?.statusText,
-            responseData: JSON.stringify(requestError.response?.data).substring(0, 500)
+            responseData: error.response?.data ? JSON.stringify(error.response.data).substring(0, 500) : null
         });
         
         res.status(errorResponse.status).json(errorResponse);
