@@ -366,20 +366,24 @@ async function handler(req, res) {
         console.log(`DEBUG - Enriching suggestions`);
         enrichedResponse = enrichSuggestions(responseData, req.query);
 
-        // Store in cache if appropriate with requestId for tracking
-        if (canUseCache && enrichedResponse.length > 0) {
+        if (canUseCache && enrichedResponse && enrichedResponse.length > 0) {
             console.log(`DEBUG - Storing enriched response in cache, length: ${enrichedResponse.length}`);
             
-            // Add explicit cache set logging
-            logCacheSet('suggestions', `suggestions:${JSON.stringify(req.query)}`, {
-                requestId,
-                query: req.query,
-                ttl: '3600s',
-                dataSize: `${JSON.stringify(enrichedResponse).length} chars`
-            });
-            
-            const cacheResult = await setCachedData('suggestions', req.query, enrichedResponse, requestId);
-            console.log(`DEBUG - Cache set result: ${cacheResult}`);
+            try {
+                // Add logging for the exact key being used
+                console.log(`DEBUG - Cache key parameters:`, {
+                    endpoint: 'suggestions',
+                    collection: req.query.collection || 'seattleu~sp-search',
+                    profile: req.query.profile || '_default',
+                    query: req.query.query || req.query.partial_query
+                });
+                
+                // Use the suggestions endpoint identifier to match with the retrieval
+                const cacheResult = await setCachedData('suggestions', req.query, enrichedResponse, requestId);
+                console.log(`DEBUG - Cache set result: ${cacheResult}`);
+            } catch (cacheSetError) {
+                console.error('DEBUG - Error setting cache:', cacheSetError);
+            }
         } else {
             console.log(`DEBUG - Skipping cache storage, canUseCache: ${canUseCache}, resultsLength: ${enrichedResponse.length}`);
         }
