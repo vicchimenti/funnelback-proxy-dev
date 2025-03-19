@@ -318,7 +318,11 @@ async function handler(req, res) {
     let cacheHit = false;
     let formattedResponse = null;
     
-    // Try to get data from cache first
+    // Get location data based on the user's IP first
+    const locationData = await getLocationData(userIp);
+    console.log('GeoIP location data:', locationData);
+
+    // Then check cache
     if (canUseCache) {
         try {
             const cachedData = await getCachedData('programs', req.query, requestId);
@@ -343,7 +347,7 @@ async function handler(req, res) {
                 res.setHeader('Content-Type', 'application/json');
                 res.send(formattedResponse);
                 
-                // Record analytics in background
+                // Record analytics in background (now locationData is available)
                 recordQueryAnalytics(req, locationData, startTime, formattedResponse, true);
                 return; // Exit early since response already sent
             }
@@ -351,10 +355,6 @@ async function handler(req, res) {
             console.error('Cache error in programs handler:', cacheError);
         }
     }
-
-    // Get location data based on the user's IP
-    const locationData = await getLocationData(userIp);
-    console.log('GeoIP location data:', locationData);
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
