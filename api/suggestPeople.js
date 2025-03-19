@@ -16,8 +16,8 @@
  * - Comprehensive error handling with detailed logging
  * - Analytics integration
  * 
- * @author Victor Chimenti, Team
- * @version 4.2.6
+ * @author Victor Chimenti
+ * @version 4.2.7
  * @namespace suggestPeople
  * @lastmodified 2025-03-19
  * @license MIT
@@ -241,6 +241,8 @@ async function handler(req, res) {
     
     let cacheHit = false;
     let formattedResults = null;
+    const locationData = await getLocationData(userIp);
+    console.log('GeoIP location data:', locationData);
     
     // Try to get data from cache first
     if (canUseCache) {
@@ -275,9 +277,6 @@ async function handler(req, res) {
             console.error('Cache error in people handler:', cacheError);
         }
     }
-
-    const locationData = await getLocationData(userIp);
-    console.log('GeoIP location data:', locationData);
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
