@@ -21,7 +21,7 @@
  * - Session tracking
  * 
  * @author Victor Chimenti, Team
- * @version 4.2.2
+ * @version 4.2.3
  * @namespace suggestPrograms
  * @license MIT
  * @lastModified 2025-03-19
@@ -226,9 +226,9 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedRespo
                 timestamp: new Date(),
                 clickedResults: [], // Initialize empty array to ensure field exists
                 enrichmentData: {
-                    cacheHit,
-                    totalResults: formattedResponse.metadata.totalResults,
-                    queryTime: formattedResponse.metadata.queryTime
+                    cacheHit: cacheHit || false,
+                    totalResults: formattedResponse?.metadata?.totalResults || 0, 
+                    queryTime: formattedResponse?.metadata?.queryTime || 0
                 }
             };
             
@@ -334,7 +334,7 @@ async function handler(req, res) {
                 logEvent('info', 'Cache hit for suggestions', {
                     status: 200,
                     processingTime: `${processingTime}ms`,
-                    suggestionsCount: enrichedResponse.length || 0,
+                    suggestionsCount: formattedResponse.length || 0,
                     query: req.query,
                     headers: req.headers,
                     cacheHit: true
@@ -437,8 +437,8 @@ async function handler(req, res) {
         };
 
         // Store in cache if appropriate
-        if (canUseCache && enrichedResponse.length > 0) {
-            await setCachedData('programs', req.query, enrichedResponse, requestId);
+        if (canUseCache && formattedResponse.programs.length > 0) {
+            await setCachedData('programs', req.query, formattedResponse, requestId);
         }
         const processingTime = Date.now() - startTime;
 

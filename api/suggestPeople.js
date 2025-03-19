@@ -17,7 +17,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti, Team
- * @version 4.2.3
+ * @version 4.2.4
  * @namespace suggestPeople
  * @lastmodified 2025-03-19
  * @license MIT
@@ -176,8 +176,8 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedResul
                 tabs: ['Faculty & Staff'],
                 sessionId: sessionId,
                 enrichmentData: {
-                    cacheHit,
-                    resultCount
+                    cacheHit: cacheHit || false,
+                    resultCount: formattedResults?.length || 0
                 },
                 timestamp: new Date()
             };
@@ -258,7 +258,7 @@ async function handler(req, res) {
                 logEvent('info', 'Cache hit for suggestions', {
                     status: 200,
                     processingTime: `${processingTime}ms`,
-                    suggestionsCount: enrichedResponse.length || 0,
+                    suggestionsCount: formattedResults.length || 0,
                     query: req.query,
                     headers: req.headers,
                     cacheHit: true
@@ -388,8 +388,8 @@ async function handler(req, res) {
         });
 
         // Store in cache if appropriate
-        if (canUseCache && enrichedResponse.length > 0) {
-            await setCachedData('people', req.query, enrichedResponse, requestId);
+        if (canUseCache && formattedResults.length > 0) {
+            await setCachedData('people', req.query, formattedResults, requestId);
         }
 
         // Send response
