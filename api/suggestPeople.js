@@ -17,7 +17,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti, Team
- * @version 4.2.5
+ * @version 4.2.6
  * @namespace suggestPeople
  * @lastmodified 2025-03-19
  * @license MIT
@@ -177,7 +177,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedResul
                 sessionId: sessionId,
                 enrichmentData: {
                     cacheHit: cacheHit || false,
-                    resultCount: formattedResults?.length || 0
+                    resultCount: formattedResults ? formattedResults.length : 0
                 },
                 timestamp: new Date()
             };
