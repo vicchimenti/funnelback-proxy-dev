@@ -18,7 +18,7 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.3.0
+* @version 4.3.1
 * @namespace suggestionHandler
 * @license MIT
 * @lastModified 2025-03-19
