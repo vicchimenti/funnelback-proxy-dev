@@ -18,7 +18,7 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.3.1
+* @version 4.3.2
 * @namespace suggestionHandler
 * @license MIT
 * @lastModified 2025-03-19
@@ -477,12 +477,12 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
                 sessionId: sessionId,
                 clickedResults: [], // Ensure field exists
                 enrichmentData: {
-                    totalSuggestions: enrichedResponse.length,
-                    suggestionsData: enrichedResponse.map(s => ({
+                    totalSuggestions: enrichedResponse ? enrichedResponse.length : 0,
+                    suggestionsData: enrichedResponse ? enrichedResponse.map(s => ({
                         display: s.display,
                         tabs: s.metadata.tabs
-                    })),
-                    cacheHit
+                    })) : [],
+                    cacheHit: cacheHit || false
                 },
                 timestamp: new Date()
             };
