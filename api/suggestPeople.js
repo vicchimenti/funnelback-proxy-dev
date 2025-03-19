@@ -17,7 +17,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti, Team
- * @version 4.2.2
+ * @version 4.2.3
  * @namespace suggestPeople
  * @lastmodified 2025-03-19
  * @license MIT
@@ -416,12 +416,12 @@ async function handler(req, res) {
         });
 
         console.error('DEBUG - Funnelback API request error details:', {
-            message: requestError.message,
-            stack: requestError.stack,
-            name: requestError.name,
-            isAxiosError: requestError.isAxiosError,
-            status: requestError.response?.status,
-            statusText: requestError.response?.statusText,
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+            isAxiosError: error.isAxiosError,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
             responseData: error.response?.data ? JSON.stringify(error.response.data).substring(0, 500) : null
         });
         
