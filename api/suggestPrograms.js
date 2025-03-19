@@ -21,7 +21,7 @@
  * - Session tracking
  * 
  * @author Victor Chimenti, Team
- * @version 4.2.2
+ * @version 4.2.1
  * @namespace suggestPrograms
  * @license MIT
  * @lastModified 2025-03-19
@@ -322,7 +322,7 @@ async function handler(req, res) {
     if (canUseCache) {
         try {
             // Pass requestId to track cache operations through the request lifecycle
-            const cachedData = await getCachedData('suggestions', req.query, requestId);
+            const cachedData = await getCachedData('programs', req.query, requestId); // For suggestPrograms.js
             if (cachedData) {
                 cacheHit = true;
                 enrichedResponse = cachedData;
@@ -345,7 +345,7 @@ async function handler(req, res) {
             }
         } catch (cacheError) {
             // Log cache error with standardized format
-            logCacheError('suggestions', null, {
+            logCacheError('programs', null, {
                 requestId,
                 query: req.query,
                 errorType: cacheError.name,
