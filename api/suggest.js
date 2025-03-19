@@ -18,7 +18,7 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.2.2
+* @version 4.3.0
 * @namespace suggestionHandler
 * @license MIT
 * @lastModified 2025-03-19
@@ -37,9 +37,11 @@ const {
     getCachedData, 
     setCachedData, 
     isCachingEnabled,
+    logCacheCheck,
     logCacheHit,
     logCacheMiss,
-    logCacheError
+    logCacheError,
+    logCacheSet
 } = require('../lib/cacheService');
 
 /**
@@ -56,8 +58,6 @@ const {
 * @param {boolean} [data.cacheHit] - Whether data was served from cache
 */
 function logEvent(level, message, data = {}) {
-   // [Your existing logEvent function]
-   // No changes needed here
    const serverInfo = {
        hostname: os.hostname(),
        platform: os.platform(),
@@ -211,6 +211,9 @@ async function handler(req, res) {
    const startTime = Date.now();
    const requestId = req.headers['x-vercel-id'] || Date.now().toString();
    
+   console.log(`DEBUG - suggest.js handler called with requestId: ${requestId}`);
+   console.log(`DEBUG - Request query:`, req.query);
+   
    // Set CORS headers
    res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -221,15 +224,15 @@ async function handler(req, res) {
     (req.headers['x-real-ip']) || 
     req.socket.remoteAddress;
 
-    // Add debug logging
-    console.log('IP Headers:', {
-        originalClientIp: req.headers['x-original-client-ip'],
-        forwardedFor: req.headers['x-forwarded-for'],
-        realIp: req.headers['x-real-ip'],
-        socketRemote: req.socket.remoteAddress,
-        vercelIpCity: req.headers['x-vercel-ip-city'],
-        finalUserIp: userIp
-    });
+   // Add debug logging
+   console.log('IP Headers:', {
+       originalClientIp: req.headers['x-original-client-ip'],
+       forwardedFor: req.headers['x-forwarded-for'],
+       realIp: req.headers['x-real-ip'],
+       socketRemote: req.socket.remoteAddress,
+       vercelIpCity: req.headers['x-vercel-ip-city'],
+       finalUserIp: userIp
+   });
 
    if (req.method === 'OPTIONS') {
        logEvent('info', 'OPTIONS request', { 
@@ -240,54 +243,93 @@ async function handler(req, res) {
        return;
    }
 
+   // Check caching capability
+   console.log(`DEBUG - About to check if caching is enabled, requestId: ${requestId}`);
+   
+   // Added await here - this is critical
+   const cachingEnabled = await isCachingEnabled();
+   console.log(`DEBUG - Caching enabled result: ${cachingEnabled}`);
+   
    // Only use caching for queries with 3 or more characters
-   const canUseCache = isCachingEnabled() && 
+   const canUseCache = cachingEnabled && 
                      req.query.query && 
                      req.query.query.length >= 3;
+   
+   console.log(`DEBUG - Can use cache: ${canUseCache}, query length: ${req.query.query?.length || 0}`);
    
    let cacheHit = false;
    let enrichedResponse = null;
    
-    // Try to get data from cache first
-    if (canUseCache) {
-        try {
-            // Pass requestId to track cache operations through the request lifecycle
-            const cachedData = await getCachedData('suggestions', req.query, requestId);
-            if (cachedData) {
-                cacheHit = true;
-                enrichedResponse = cachedData;
-                
-                // Calculate processing time
-                const processingTime = Date.now() - startTime;
-                
-                // Log cache hit with standard event logging
-                logEvent('info', 'Cache hit for suggestions', {
-                    status: 200,
-                    processingTime: `${processingTime}ms`,
-                    suggestionsCount: enrichedResponse.length || 0,
-                    query: req.query,
-                    headers: req.headers,
-                    cacheHit: true
-                });
-                
-                // Send cached response and continue with analytics recording
-                res.json(enrichedResponse);
-            }
-        } catch (cacheError) {
-            // Log cache error with standardized format
-            logCacheError('suggestions', null, {
-                requestId,
-                query: req.query,
-                errorType: cacheError.name,
-                errorMessage: cacheError.message
-            });
-            console.error('Cache error:', cacheError);
-            // Continue with normal request flow
-        }
-    }
+   // Try to get data from cache first
+   if (canUseCache) {
+       console.log(`DEBUG - Attempting cache lookup for suggestQuery: ${req.query.query}`);
+       try {
+           // Pass requestId to track cache operations through the request lifecycle
+           console.log(`DEBUG - Calling getCachedData with requestId: ${requestId}`);
+           const cachedData = await getCachedData('suggestions', req.query, requestId);
+           console.log(`DEBUG - getCachedData returned: ${cachedData ? 'data found' : 'no data'}`);
+           
+           if (cachedData) {
+               cacheHit = true;
+               enrichedResponse = cachedData;
+               
+               // Calculate processing time
+               const processingTime = Date.now() - startTime;
+               
+               // Log success explicitly here
+               console.log(`DEBUG - Cache hit successful for suggestions endpoint. Processing time: ${processingTime}ms`);
+               
+               // Add extra cache hit log
+               logCacheHit('suggestions', `suggestions:${JSON.stringify(req.query)}`, {
+                   requestId,
+                   query: req.query,
+                   processingTime: `${processingTime}ms`,
+                   dataSize: `${JSON.stringify(enrichedResponse).length} chars`
+               });
+               
+               // Log cache hit with standard event logging
+               logEvent('info', 'Cache hit for suggestions', {
+                   status: 200,
+                   processingTime: `${processingTime}ms`,
+                   suggestionsCount: enrichedResponse.length || 0,
+                   query: req.query,
+                   headers: req.headers,
+                   cacheHit: true
+               });
+               
+               // Send cached response and continue with analytics recording
+               res.json(enrichedResponse);
+           } else {
+               console.log(`DEBUG - Cache miss for suggestions endpoint`);
+               logCacheMiss('suggestions', `suggestions:${JSON.stringify(req.query)}`, {
+                   requestId,
+                   query: req.query
+               });
+           }
+       } catch (cacheError) {
+           // Added more detailed error logging
+           console.error('DEBUG - Cache error details:', {
+               message: cacheError.message,
+               stack: cacheError.stack,
+               name: cacheError.name
+           });
+           
+           // Log cache error with standardized format
+           logCacheError('suggestions', `suggestions:${JSON.stringify(req.query)}`, {
+               requestId,
+               query: req.query,
+               errorType: cacheError.name,
+               errorMessage: cacheError.message
+           });
+           
+           console.error('Cache error:', cacheError);
+           // Continue with normal request flow
+       }
+   }
 
    // If we got a cache hit, we only need to record analytics
    if (cacheHit) {
+       console.log(`DEBUG - Cache hit handling - skipping Funnelback request`);
        const locationData = await getLocationData(userIp);
        recordQueryAnalytics(req, locationData, startTime, enrichedResponse, true);
        return; // Exit early since response already sent
@@ -309,20 +351,37 @@ async function handler(req, res) {
         };
         console.log('- Outgoing Headers to Funnelback:', funnelbackHeaders);
 
+        console.log(`DEBUG - Making Funnelback API request to ${funnelbackUrl}`);
         const response = await axios.get(funnelbackUrl, {
             params: req.query,
             headers: funnelbackHeaders
         });
+        console.log(`DEBUG - Funnelback API response status: ${response.status}`);
 
         // Ensure response data is an array (handle API inconsistencies)
         const responseData = Array.isArray(response.data) ? response.data : [];
+        console.log(`DEBUG - Funnelback returned ${responseData.length} results`);
 
         // Enrich suggestions with metadata
+        console.log(`DEBUG - Enriching suggestions`);
         enrichedResponse = enrichSuggestions(responseData, req.query);
 
-        // Store in cache if appropriate
+        // Store in cache if appropriate with requestId for tracking
         if (canUseCache && enrichedResponse.length > 0) {
-            await setCachedData('suggestions', req.query, enrichedResponse, requestId);
+            console.log(`DEBUG - Storing enriched response in cache, length: ${enrichedResponse.length}`);
+            
+            // Add explicit cache set logging
+            logCacheSet('suggestions', `suggestions:${JSON.stringify(req.query)}`, {
+                requestId,
+                query: req.query,
+                ttl: '3600s',
+                dataSize: `${JSON.stringify(enrichedResponse).length} chars`
+            });
+            
+            const cacheResult = await setCachedData('suggestions', req.query, enrichedResponse, requestId);
+            console.log(`DEBUG - Cache set result: ${cacheResult}`);
+        } else {
+            console.log(`DEBUG - Skipping cache storage, canUseCache: ${canUseCache}, resultsLength: ${enrichedResponse.length}`);
         }
 
         // Process time for this request
@@ -338,11 +397,21 @@ async function handler(req, res) {
         });
 
         // Record analytics data
+        console.log(`DEBUG - Recording analytics`);
         await recordQueryAnalytics(req, locationData, startTime, enrichedResponse, false);
   
         // Send response to client
+        console.log(`DEBUG - Sending response to client, length: ${enrichedResponse.length}`);
         res.json(enrichedResponse);
    } catch (error) {
+       console.error('DEBUG - Handler error details:', {
+           message: error.message,
+           stack: error.stack, 
+           name: error.name,
+           responseStatus: error.response?.status,
+           responseData: error.response?.data
+       });
+       
        logEvent('error', 'Handler error', {
            query: req.query,
            error: error.message,
