@@ -4,8 +4,10 @@
  * Handles autocomplete suggestion requests for faculty and staff searches with
  * structured logging for Vercel serverless environment. Returns detailed information
  * including affiliation, college, department, and position data.
+ * Includes Vercel native Redis caching for improved performance.
  * 
  * Features:
+ * - Redis caching for fast response times 
  * - CORS handling for Seattle University domain
  * - Structured JSON logging for Vercel
  * - Request/Response tracking with detailed headers
@@ -14,10 +16,10 @@
  * - Comprehensive error handling with detailed logging
  * - Analytics integration
  * 
- * @author Victor Chimenti
- * @version 4.1.0
+ * @author Victor Chimenti, Team
+ * @version 4.2.1
  * @namespace suggestPeople
- * @lastmodified 2025-03-18
+ * @lastmodified 2025-03-19
  * @license MIT
  */
 
@@ -29,7 +31,12 @@ const {
     createStandardAnalyticsData, 
     sanitizeSessionId, 
     logAnalyticsData 
-} = require('../lib/schemaHandler');  
+} = require('../lib/schemaHandler');
+const { 
+    getCachedData, 
+    setCachedData, 
+    isCachingEnabled 
+} = require('../lib/cacheService');
 
 /**
  * Creates a standardized log entry for Vercel environment
@@ -37,6 +44,7 @@ const {
  * @param {string} level - Log level ('info', 'warn', 'error')
  * @param {string} message - Main log message/action
  * @param {Object} data - Additional data to include in log
+ * @param {boolean} [data.cacheHit] - Whether data was served from cache
  */
 function logEvent(level, message, data = {}) {
     const serverInfo = {
@@ -83,7 +91,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '4.1.0',
+        logVersion: '4.2.0',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -93,7 +101,8 @@ function logEvent(level, message, data = {}) {
                 status: data.status,
                 processingTime: data.processingTime,
                 contentPreview: data.responseContent ? 
-                    data.responseContent.substring(0, 500) + '...' : null
+                    data.responseContent.substring(0, 500) + '...' : null,
+                cacheHit: data.cacheHit
             } : null,
             error: data.error || null
         },
@@ -121,6 +130,89 @@ function cleanTitle(title = '') {
         .trim();                         // Clean up whitespace
 }
 
+/**
+ * Records analytics data for people search
+ * 
+ * @param {Object} req - The request object
+ * @param {Object} locationData - Geo location data
+ * @param {number} startTime - Request start time
+ * @param {Array} formattedResults - The formatted results
+ * @param {boolean} cacheHit - Whether response was served from cache
+ */
+async function recordQueryAnalytics(req, locationData, startTime, formattedResults, cacheHit) {
+    try {
+        console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
+        
+        if (process.env.MONGODB_URI) {
+            // Extract and sanitize session ID
+            const sessionId = sanitizeSessionId(req.query.sessionId || req.headers['x-session-id']);
+            console.log('Session ID sources:', {
+                fromQueryParam: req.query.sessionId,
+                fromHeader: req.headers['x-session-id'],
+                fromBody: req.body?.sessionId,
+                afterSanitization: sessionId
+            });
+
+            const processingTime = Date.now() - startTime;
+            const resultCount = formattedResults.length;
+            
+            // Create raw analytics data
+            const rawData = {
+                handler: 'suggestPeople',
+                query: req.query.query || '[empty query]',
+                searchCollection: 'seattleu~sp-search',
+                userAgent: req.headers['user-agent'],
+                referer: req.headers.referer,
+                city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+                region: locationData.region || req.headers['x-vercel-ip-country-region'],
+                country: locationData.country || req.headers['x-vercel-ip-country'],
+                timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
+                responseTime: processingTime,
+                resultCount: resultCount,
+                isStaffTab: true,  // This is specifically for staff searches
+                tabs: ['Faculty & Staff'],
+                sessionId: sessionId,
+                enrichmentData: {
+                    cacheHit,
+                    resultCount
+                },
+                timestamp: new Date()
+            };
+            
+            // Standardize data to ensure consistent schema
+            const analyticsData = createStandardAnalyticsData(rawData);
+            
+            // Log data (excluding sensitive information)
+            logAnalyticsData(analyticsData, 'suggestPeople recording');
+            
+            // Record the analytics
+            try {
+                const recordResult = await recordQuery(analyticsData);
+                console.log('Analytics record result:', recordResult ? 'Saved' : 'Not saved');
+                if (recordResult && recordResult._id) {
+                    console.log('Analytics record ID:', recordResult._id.toString());
+                }
+            } catch (recordError) {
+                console.error('Error recording analytics:', recordError.message);
+                if (recordError.name === 'ValidationError') {
+                    console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
+                }
+            }
+        } else {
+            console.log('No MongoDB URI defined, skipping analytics recording');
+        }
+    } catch (analyticsError) {
+        console.error('Analytics error:', analyticsError);
+    }
+}
+
+/**
+ * Handler for people/faculty/staff suggestion requests to Funnelback
+ * Now includes Redis caching for improved performance
+ * 
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
 async function handler(req, res) {
     const startTime = Date.now();
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
@@ -137,6 +229,48 @@ async function handler(req, res) {
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
+    }
+
+    // Only use caching for queries with 3 or more characters
+    const canUseCache = isCachingEnabled() && 
+                     req.query.query && 
+                     req.query.query.length >= 3;
+    
+    let cacheHit = false;
+    let formattedResults = null;
+    
+    // Try to get data from cache first
+    if (canUseCache) {
+        try {
+            const cachedData = await getCachedData('people', req.query);
+            if (cachedData) {
+                cacheHit = true;
+                formattedResults = cachedData;
+                
+                // Log cache hit
+                const processingTime = Date.now() - startTime;
+                logEvent('info', 'Cache hit for people suggestions', {
+                    query: req.query,
+                    status: 200,
+                    processingTime: `${processingTime}ms`,
+                    headers: req.headers,
+                    cacheHit: true
+                });
+                
+                // Send cached response
+                res.setHeader('Content-Type', 'application/json');
+                res.send(formattedResults);
+                
+                // Get location data and record analytics (in background)
+                const locationData = await getLocationData(userIp);
+                recordQueryAnalytics(req, locationData, startTime, formattedResults, true);
+                
+                return; // Exit early since response already sent
+            }
+        } catch (cacheError) {
+            console.error('Cache error:', cacheError);
+            // Continue with normal request flow
+        }
     }
 
     const locationData = await getLocationData(userIp);
@@ -209,71 +343,11 @@ async function handler(req, res) {
             processingTime: `${processingTime}ms`,
             responseContent: JSON.stringify(response.data).substring(0, 500) + '...',
             headers: req.headers,
+            cacheHit: false
         });
 
-        const sessionId = sanitizeSessionId(req.query.sessionId || req.headers['x-session-id']);
-        console.log('Session ID sources:', {
-            fromQueryParam: req.query.sessionId,
-            fromHeader: req.headers['x-session-id'],
-            fromBody: req.body?.sessionId,
-            afterSanitization: sessionId
-        });
-
-
-
-        // Record analytics data
-        try {
-            console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
-            
-            if (process.env.MONGODB_URI) {
-                console.log('Raw query parameters:', req.query);
-                
-                const rawData = {
-                    handler: 'suggestPeople',
-                    query: req.query.query || '[empty query]',
-                    searchCollection: 'seattleu~sp-search',
-                    userAgent: req.headers['user-agent'],
-                    referer: req.headers.referer,
-                    city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-                    region: locationData.region || req.headers['x-vercel-ip-country-region'],
-                    country: locationData.country || req.headers['x-vercel-ip-country'],
-                    timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
-                    responseTime: processingTime,
-                    resultCount: resultCount,
-                    isStaffTab: true,  // This is specifically for staff searches
-                    tabs: ['Faculty & Staff'],
-                    sessionId: sessionId,
-                    timestamp: new Date()
-                };
-                
-                // Standardize data to ensure consistent schema
-                const analyticsData = createStandardAnalyticsData(rawData);
-                
-                // Log data (excluding sensitive information)
-                logAnalyticsData(analyticsData, 'suggestPeople recording');
-                
-                // Record the analytics
-                try {
-                    const recordResult = await recordQuery(analyticsData);
-                    console.log('Analytics record result:', recordResult ? 'Saved' : 'Not saved');
-                    if (recordResult && recordResult._id) {
-                        console.log('Analytics record ID:', recordResult._id.toString());
-                    }
-                } catch (recordError) {
-                    console.error('Error recording analytics:', recordError.message);
-                    if (recordError.name === 'ValidationError') {
-                        console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
-                    }
-                }
-            } else {
-                console.log('No MongoDB URI defined, skipping analytics recording');
-            }
-        } catch (analyticsError) {
-            console.error('Analytics error:', analyticsError);
-        }
-
-        // Format and send response
-        const formattedResults = (response.data?.response?.resultPacket?.results || []).map(result => {
+        // Format and prepare response
+        formattedResults = (response.data?.response?.resultPacket?.results || []).map(result => {
             // Extract and clean metadata fields
             const affiliation = result.listMetadata?.affiliation?.[0] ? cleanTitle(result.listMetadata.affiliation[0]) : null;
             const position = result.listMetadata?.peoplePosition?.[0] ? cleanTitle(result.listMetadata.peoplePosition[0]) : null;
@@ -290,8 +364,18 @@ async function handler(req, res) {
                 image: result.listMetadata?.image?.[0] || null
             };
         });
+
+        // Store in cache if appropriate
+        if (canUseCache && formattedResults.length > 0) {
+            await setCachedData('people', req.query, formattedResults);
+        }
+
+        // Send response
         res.setHeader('Content-Type', 'application/json');
         res.send(formattedResults);
+        
+        // Record analytics (in background)
+        recordQueryAnalytics(req, locationData, startTime, formattedResults, false);
 
     } catch (error) {
         // Log detailed error information

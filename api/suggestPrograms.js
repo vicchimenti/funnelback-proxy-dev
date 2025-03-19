@@ -5,8 +5,10 @@
  * Provides optimized search results for academic programs, returning the top 5 matches
  * with cleaned and formatted data ready for frontend consumption. Maps to Funnelback's
  * native response structure following the correct path: response -> resultPacket -> results.
+ * Now includes Redis caching for faster response times.
  * 
  * Features:
+ * - Redis caching for improved performance
  * - JSON endpoint integration with Funnelback
  * - Limited to top 5 most relevant results
  * - Correct response path traversal
@@ -18,11 +20,11 @@
  * - Enhanced analytics with GeoIP integration
  * - Session tracking
  * 
- * @author Victor Chimenti
- * @version 4.1.0
+ * @author Victor Chimenti, Team
+ * @version 4.2.1
  * @namespace suggestPrograms
  * @license MIT
- * @lastModified 2025-03-18
+ * @lastModified 2025-03-19
  */
 
 const axios = require('axios');
@@ -34,6 +36,11 @@ const {
     sanitizeSessionId, 
     logAnalyticsData 
 } = require('../lib/schemaHandler');
+const { 
+    getCachedData, 
+    setCachedData, 
+    isCachingEnabled 
+} = require('../lib/cacheService');
 
 /**
  * Cleans program titles by removing HTML tags and selecting first pipe-separated value
@@ -65,6 +72,7 @@ function cleanProgramTitle(title) {
  * @param {string} [data.processingTime] - Request processing duration
  * @param {Object} [data.responseContent] - Response content with program data
  * @param {string} [data.error] - Error message if applicable
+ * @param {boolean} [data.cacheHit] - Whether data was served from cache
  */
 function logEvent(level, message, data = {}) {
     const userIp = data.headers?.['x-forwarded-for'] || 
@@ -112,7 +120,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-programs',
-        version: '4.1.0',
+        version: '4.2.0',
         timestamp: new Date().toISOString(),
         level,
         message,
@@ -125,7 +133,8 @@ function logEvent(level, message, data = {}) {
         server: serverInfo,
         performance: data.processingTime ? {
             duration: data.processingTime,
-            status: data.status
+            status: data.status,
+            cacheHit: data.cacheHit
         } : null
     };
 
@@ -152,7 +161,8 @@ function logEvent(level, message, data = {}) {
 
         logEntry.response = {
             preview: responsePreview,
-            contentType: typeof data.responseContent
+            contentType: typeof data.responseContent,
+            cacheHit: data.cacheHit
         };
     }
 
@@ -167,9 +177,90 @@ function logEvent(level, message, data = {}) {
 }
 
 /**
+ * Records analytics data for program queries
+ * 
+ * @param {Object} req - The request object
+ * @param {Object} locationData - Geo location data
+ * @param {number} startTime - Request start time
+ * @param {Object} formattedResponse - The formatted response data
+ * @param {boolean} cacheHit - Whether response was served from cache
+ */
+async function recordQueryAnalytics(req, locationData, startTime, formattedResponse, cacheHit) {
+    try {
+        console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
+        
+        if (process.env.MONGODB_URI) {
+            // Extract and sanitize session ID
+            const sessionId = sanitizeSessionId(req.query.sessionId || req.headers['x-session-id']);
+            console.log('Session ID sources:', {
+                fromQueryParam: req.query.sessionId,
+                fromHeader: req.headers['x-session-id'],
+                fromBody: req.body?.sessionId,
+                afterSanitization: sessionId
+            });
+
+            const processingTime = Date.now() - startTime;
+            const resultCount = formattedResponse.programs.length;
+            
+            // Create raw analytics data
+            const rawData = {
+                handler: 'suggestPrograms',
+                query: req.query.query || '[empty query]',
+                searchCollection: 'seattleu~ds-programs',
+                userAgent: req.headers['user-agent'],
+                referer: req.headers.referer,
+                city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+                region: locationData.region || req.headers['x-vercel-ip-country-region'],
+                country: locationData.country || req.headers['x-vercel-ip-country'],
+                timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
+                responseTime: processingTime,
+                resultCount: resultCount,
+                hasResults: resultCount > 0,
+                isProgramTab: true,  // This is specifically for program searches
+                isStaffTab: false,
+                tabs: ['program-main'],
+                sessionId: sessionId,
+                timestamp: new Date(),
+                clickedResults: [], // Initialize empty array to ensure field exists
+                enrichmentData: {
+                    cacheHit,
+                    totalResults: formattedResponse.metadata.totalResults,
+                    queryTime: formattedResponse.metadata.queryTime
+                }
+            };
+            
+            // Standardize data to ensure consistent schema
+            const analyticsData = createStandardAnalyticsData(rawData);
+            
+            // Log data (excluding sensitive information)
+            logAnalyticsData(analyticsData, 'suggestPrograms recording');
+            
+            // Record the analytics
+            try {
+                const recordResult = await recordQuery(analyticsData);
+                console.log('Analytics record result:', recordResult ? 'Saved' : 'Not saved');
+                if (recordResult && recordResult._id) {
+                    console.log('Analytics record ID:', recordResult._id.toString());
+                }
+            } catch (recordError) {
+                console.error('Error recording analytics:', recordError.message);
+                if (recordError.name === 'ValidationError') {
+                    console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
+                }
+            }
+        } else {
+            console.log('No MongoDB URI defined, skipping analytics recording');
+        }
+    } catch (analyticsError) {
+        console.error('Analytics error:', analyticsError);
+    }
+}
+
+/**
  * Handler for program search requests to Funnelback search service
  * Processes requests through JSON endpoint and returns top 5 results
  * with cleaned and formatted data optimized for frontend consumption.
+ * Now includes Redis caching for improved performance.
  * 
  * @param {Object} req - Express request object
  * @param {Object} req.query - Query parameters from the request
@@ -216,6 +307,49 @@ async function handler(req, res) {
         return;
     }
 
+    // Only use caching for queries with 3 or more characters
+    const canUseCache = isCachingEnabled() && 
+                     req.query.query && 
+                     req.query.query.length >= 3;
+    
+    let cacheHit = false;
+    let formattedResponse = null;
+    
+    // Try to get data from cache first
+    if (canUseCache) {
+        try {
+            const cachedData = await getCachedData('programs', req.query);
+            if (cachedData) {
+                cacheHit = true;
+                formattedResponse = cachedData;
+                
+                // Log cache hit
+                const processingTime = Date.now() - startTime;
+                logEvent('info', 'Cache hit for program suggestions', {
+                    query: query,
+                    status: 200,
+                    processingTime: `${processingTime}ms`,
+                    responseContent: formattedResponse,
+                    headers: req.headers,
+                    cacheHit: true
+                });
+                
+                // Send cached response
+                res.setHeader('Content-Type', 'application/json');
+                res.send(formattedResponse);
+                
+                // Get location data and record analytics (in background)
+                const locationData = await getLocationData(userIp);
+                recordQueryAnalytics(req, locationData, startTime, formattedResponse, true);
+                
+                return; // Exit early since response already sent
+            }
+        } catch (cacheError) {
+            console.error('Cache error:', cacheError);
+            // Continue with normal request flow
+        }
+    }
+
     // Get location data based on the user's IP
     const locationData = await getLocationData(userIp);
     console.log('GeoIP location data:', locationData);
@@ -257,12 +391,8 @@ async function handler(req, res) {
             resultCount: response.data.response?.resultPacket?.results?.length || 0
         });
 
-        // Get result count for analytics
-        const resultCount = response.data.response?.resultPacket?.results?.length || 0;
-        const processingTime = Date.now() - startTime;
-
         // Format response for frontend consumption with correct path traversal
-        const formattedResponse = {
+        formattedResponse = {
             metadata: {
                 totalResults: response.data.response?.resultPacket?.resultsSummary?.totalMatching || 0,
                 queryTime: response.data.response?.resultPacket?.resultsSummary?.queryTime || 0,
@@ -285,72 +415,12 @@ async function handler(req, res) {
             }))
         };
 
-        // Extract and sanitize session ID
-        const sessionId = sanitizeSessionId(req.query.sessionId || req.headers['x-session-id']);
-        console.log('Extracted session ID:', sessionId);
-
-        // Add detailed session ID debugging
-        console.log('Session ID sources:', {
-            fromQueryParam: req.query.sessionId,
-            fromHeader: req.headers['x-session-id'],
-            fromBody: req.body?.sessionId,
-            afterSanitization: sessionId
-        });
-
-        // Record analytics data
-        try {
-            console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
-            
-            if (process.env.MONGODB_URI) {
-                console.log('Raw query parameters:', req.query);
-                
-                // Create raw analytics data
-                const rawData = {
-                    handler: 'suggestPrograms',
-                    query: req.query.query || '[empty query]',
-                    searchCollection: 'seattleu~ds-programs',
-                    userAgent: req.headers['user-agent'],
-                    referer: req.headers.referer,
-                    city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-                    region: locationData.region || req.headers['x-vercel-ip-country-region'],
-                    country: locationData.country || req.headers['x-vercel-ip-country'],
-                    timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
-                    responseTime: processingTime,
-                    resultCount: resultCount,
-                    hasResults: resultCount > 0,
-                    isProgramTab: true,  // This is specifically for program searches
-                    isStaffTab: false,
-                    tabs: ['program-main'],
-                    sessionId: sessionId,
-                    timestamp: new Date(),
-                    clickedResults: [] // Initialize empty array to ensure field exists
-                };
-                
-                // Standardize data to ensure consistent schema
-                const analyticsData = createStandardAnalyticsData(rawData);
-                
-                // Log data (excluding sensitive information)
-                logAnalyticsData(analyticsData, 'suggestPrograms recording');
-                
-                // Record the analytics
-                try {
-                    const recordResult = await recordQuery(analyticsData);
-                    console.log('Analytics record result:', recordResult ? 'Saved' : 'Not saved');
-                    if (recordResult && recordResult._id) {
-                        console.log('Analytics record ID:', recordResult._id.toString());
-                    }
-                } catch (recordError) {
-                    console.error('Error recording analytics:', recordError.message);
-                    if (recordError.name === 'ValidationError') {
-                        console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
-                    }
-                }
-            } else {
-                console.log('No MongoDB URI defined, skipping analytics recording');
-            }
-        } catch (analyticsError) {
-            console.error('Analytics error:', analyticsError);
+        // Store in cache if appropriate
+        if (canUseCache && formattedResponse.programs.length > 0) {
+            await setCachedData('programs', req.query, formattedResponse);
         }
+
+        const processingTime = Date.now() - startTime;
 
         // Log the successful response
         logEvent('info', 'Programs search completed', {
@@ -358,12 +428,17 @@ async function handler(req, res) {
             status: response.status,
             processingTime: `${processingTime}ms`,
             responseContent: formattedResponse,
-            headers: req.headers
+            headers: req.headers,
+            cacheHit: false
         });
 
         // Send the formatted response
         res.setHeader('Content-Type', 'application/json');
         res.send(formattedResponse);
+        
+        // Record analytics in background
+        recordQueryAnalytics(req, locationData, startTime, formattedResponse, false);
+        
     } catch (error) {
         const errorResponse = {
             error: true,
