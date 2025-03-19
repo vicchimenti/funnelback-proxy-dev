@@ -17,7 +17,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti, Team
- * @version 4.2.4
+ * @version 4.2.5
  * @namespace suggestPeople
  * @lastmodified 2025-03-19
  * @license MIT
@@ -245,8 +245,7 @@ async function handler(req, res) {
     // Try to get data from cache first
     if (canUseCache) {
         try {
-            // Pass requestId to track cache operations through the request lifecycle
-            const cachedData = await getCachedData('people', req.query, requestId); // For suggestPeople.js
+            const cachedData = await getCachedData('people', req.query, requestId);
             if (cachedData) {
                 cacheHit = true;
                 formattedResults = cachedData;
@@ -255,28 +254,25 @@ async function handler(req, res) {
                 const processingTime = Date.now() - startTime;
                 
                 // Log cache hit with standard event logging
-                logEvent('info', 'Cache hit for suggestions', {
+                logEvent('info', 'Cache hit for people suggestions', {
                     status: 200,
                     processingTime: `${processingTime}ms`,
-                    suggestionsCount: formattedResults.length || 0,
                     query: req.query,
                     headers: req.headers,
                     cacheHit: true
                 });
                 
-                // Send cached response and continue with analytics recording
-                res.json(formattedResults);
+                // Send cached response
+                res.setHeader('Content-Type', 'application/json');
+                res.send(formattedResults);
+                
+                // Get location data and record analytics (in background)
+                recordQueryAnalytics(req, locationData, startTime, formattedResults, true);
+                return; // Exit early since response already sent
             }
         } catch (cacheError) {
-            // Log cache error with standardized format
-            logCacheError('people', null, {
-                requestId,
-                query: req.query,
-                errorType: cacheError.name,
-                errorMessage: cacheError.message
-            });
-            console.error('Cache error:', cacheError);
-            // Continue with normal request flow
+            // Log cache error but continue with normal flow
+            console.error('Cache error in people handler:', cacheError);
         }
     }
 
@@ -387,9 +383,25 @@ async function handler(req, res) {
             };
         });
 
-        // Store in cache if appropriate
-        if (canUseCache && formattedResults.length > 0) {
-            await setCachedData('people', req.query, formattedResults, requestId);
+        if (canUseCache && formattedResults && formattedResults.length > 0) {
+            console.log(`DEBUG - Storing people results in cache, count: ${formattedResults.length}`);
+            
+            try {
+                // Log the exact parameters to help with debugging
+                console.log(`DEBUG - People cache key parameters:`, {
+                    endpoint: 'people',
+                    query: req.query.query,
+                    // Other params that might be relevant for the people endpoint
+                    collection: 'seattleu~sp-search',
+                    staffTab: true
+                });
+                
+                // Use the 'people' endpoint identifier to match retrieval
+                const cacheResult = await setCachedData('people', req.query, formattedResults, requestId);
+                console.log(`DEBUG - People cache set result: ${cacheResult}`);
+            } catch (cacheSetError) {
+                console.error('DEBUG - Error setting people cache:', cacheSetError);
+            }
         }
 
         // Send response
