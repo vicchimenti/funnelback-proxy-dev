@@ -18,7 +18,7 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.3.3
+* @version 4.3.4
 * @namespace suggestionHandler
 * @license MIT
 * @lastModified 2025-03-20
@@ -258,8 +258,15 @@ async function handler(req, res) {
                      req.query.query && 
                      req.query.query.length >= 3;
    
-   console.log(`DEBUG - Can use cache: ${canUseCache}, query length: ${req.query.query?.length || 0}`);
+   console.log(`DEBUG - Cache parameters check:`, {
+        cachingEnabled,
+        queryExists: !!req.query.query,
+        queryLength: req.query.query?.length || 0,
+        canUseCache: canUseCache
+    });
    
+   const willUseCache = canUseCache; // Create a stable copy
+   console.log(`DEBUG - Cache decision locked: ${willUseCache}`);
    let cacheHit = false;
    let enrichedResponse = null;
    
@@ -370,7 +377,7 @@ async function handler(req, res) {
         console.log(`DEBUG - Enriching suggestions`);
         enrichedResponse = enrichSuggestions(responseData, req.query);
 
-        if (canUseCache && enrichedResponse && enrichedResponse.length > 0) {
+        if (willUseCache && enrichedResponse && enrichedResponse.length > 0) {
             console.log(`DEBUG - Storing enriched response in cache, length: ${enrichedResponse.length}`);
             
             try {
@@ -390,7 +397,7 @@ async function handler(req, res) {
                 console.error('DEBUG - Error setting cache:', cacheSetError);
             }
         } else {
-            console.log(`DEBUG - Skipping cache storage, canUseCache: ${canUseCache}, resultsLength: ${enrichedResponse.length}`);
+            console.log(`DEBUG - Skipping cache storage, willUseCache: ${willUseCache}, resultsLength: ${enrichedResponse.length}`);
         }
 
         // Process time for this request
