@@ -15,9 +15,9 @@
  * 
  * @author Victor Chimenti
  * @namespace searchHandler
- * @version 4.1.1
+ * @version 4.1.2
  * @license MIT
- * @lastModified 2025-03-19
+ * @lastModified 2025-03-20
  */
 
 const axios = require('axios');
@@ -62,13 +62,14 @@ function extractResultCount(htmlContent) {
 async function handler(req, res) {
     const startTime = Date.now();
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-    console.log(`[RequestID: ${requestId}] Processing request for ${endpoint}`);
-
+    
     // Get client IP from custom header or fallback methods
     const userIp = req.headers['x-original-client-ip'] || 
                (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
                (req.headers['x-real-ip']) || 
                req.socket.remoteAddress;
+
+    console.log(`[RequestID: ${requestId}] Processing request for ${userIp}`);
 
     // Add debug logging
     console.log('IP Headers:', {
