@@ -18,7 +18,7 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.3.4
+* @version 4.3.5
 * @namespace suggestionHandler
 * @license MIT
 * @lastModified 2025-03-20
@@ -254,19 +254,20 @@ async function handler(req, res) {
    console.log(`DEBUG - Caching enabled result: ${cachingEnabled}`);
    
    // Only use caching for queries with 3 or more characters
-   const canUseCache = cachingEnabled && 
-                     req.query.query && 
-                     req.query.query.length >= 3;
-   
-   console.log(`DEBUG - Cache parameters check:`, {
+    const canUseCache = cachingEnabled && 
+                    (req.query.query || req.query.partial_query) && 
+                    (req.query.query?.length >= 3 || req.query.partial_query?.length >= 3);
+
+    console.log(`DEBUG - Cache parameters check:`, {
         cachingEnabled,
-        queryExists: !!req.query.query,
-        queryLength: req.query.query?.length || 0,
-        canUseCache: canUseCache
+        queryExists: !!(req.query.query || req.query.partial_query),
+        queryLength: (req.query.query?.length || req.query.partial_query?.length || 0),
+        canUseCache
     });
-   
-   const willUseCache = canUseCache; // Create a stable copy
-   console.log(`DEBUG - Cache decision locked: ${willUseCache}`);
+
+    // Create a stable copy
+    const willUseCache = canUseCache; 
+    console.log(`DEBUG - Cache decision locked: ${willUseCache}`);
    let cacheHit = false;
    let enrichedResponse = null;
    
