@@ -18,10 +18,10 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.3.2
+* @version 4.3.3
 * @namespace suggestionHandler
 * @license MIT
-* @lastModified 2025-03-19
+* @lastModified 2025-03-20
 */
 
 const axios = require('axios');
@@ -224,6 +224,9 @@ async function handler(req, res) {
     (req.headers['x-real-ip']) || 
     req.socket.remoteAddress;
 
+   console.log(`[RequestID: ${requestId}] Processing request for ${userIp}`);
+
+
    // Add debug logging
    console.log('IP Headers:', {
        originalClientIp: req.headers['x-original-client-ip'],
@@ -294,7 +297,8 @@ async function handler(req, res) {
                    suggestionsCount: enrichedResponse.length || 0,
                    query: req.query,
                    headers: req.headers,
-                   cacheHit: true
+                   cacheHit: true,
+                   requestId: requestId
                });
                
                // Send cached response and continue with analytics recording
@@ -375,7 +379,8 @@ async function handler(req, res) {
                     endpoint: 'suggestions',
                     collection: req.query.collection || 'seattleu~sp-search',
                     profile: req.query.profile || '_default',
-                    query: req.query.query || req.query.partial_query
+                    query: req.query.query || req.query.partial_query,
+                    requestId: requestId
                 });
                 
                 // Use the suggestions endpoint identifier to match with the retrieval
@@ -397,7 +402,8 @@ async function handler(req, res) {
             suggestionsCount: enrichedResponse.length || 0,
             query: req.query,
             headers: req.headers,
-            cacheHit: false
+            cacheHit: false,
+            requestId: requestId
         });
 
         // Record analytics data

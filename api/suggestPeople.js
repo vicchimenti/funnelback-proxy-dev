@@ -19,7 +19,7 @@
  * @author Victor Chimenti
  * @version 4.2.7
  * @namespace suggestPeople
- * @lastmodified 2025-03-19
+ * @lastmodified 2025-03-20
  * @license MIT
  */
 
