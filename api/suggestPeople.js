@@ -224,6 +224,9 @@ async function handler(req, res) {
         (req.headers['x-real-ip']) || 
         req.socket.remoteAddress;
 
+    console.log(`[RequestID: ${requestId}] Processing request for ${userIp}`);
+
+
     // CORS handling for Seattle University domain
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -261,7 +264,8 @@ async function handler(req, res) {
                     processingTime: `${processingTime}ms`,
                     query: req.query,
                     headers: req.headers,
-                    cacheHit: true
+                    cacheHit: true,
+                    requestId: requestId
                 });
                 
                 // Send cached response
@@ -316,7 +320,8 @@ async function handler(req, res) {
             service: 'suggest-people',
             url: url,
             query: Object.fromEntries(params),
-            headers: req.headers
+            headers: req.headers,
+            requestId: requestId
         });
 
         console.log('DEBUG - Making request to Funnelback with URL:', url);
@@ -360,7 +365,8 @@ async function handler(req, res) {
             processingTime: `${processingTime}ms`,
             responseContent: JSON.stringify(response.data).substring(0, 500) + '...',
             headers: req.headers,
-            cacheHit: false
+            cacheHit: false,
+            requestId: requestId
         });
 
         // Format and prepare response
@@ -390,9 +396,9 @@ async function handler(req, res) {
                 console.log(`DEBUG - People cache key parameters:`, {
                     endpoint: 'people',
                     query: req.query.query,
-                    // Other params that might be relevant for the people endpoint
                     collection: 'seattleu~sp-search',
-                    staffTab: true
+                    staffTab: true,
+                    requestId: requestId
                 });
                 
                 // Use the 'people' endpoint identifier to match retrieval
