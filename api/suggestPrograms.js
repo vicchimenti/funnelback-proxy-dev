@@ -21,7 +21,7 @@
  * - Session tracking
  * 
  * @author Victor Chimenti, Team
- * @version 4.2.6
+ * @version 4.2.7
  * @namespace suggestPrograms
  * @license MIT
  * @lastModified 2025-03-19
@@ -276,11 +276,14 @@ async function handler(req, res) {
     const startTime = Date.now();
     const requestId = req.headers['x-vercel-id'] || Date.now().toString();
     
+    
     // Get client IP from custom header or fallback methods
     const userIp = req.headers['x-original-client-ip'] || 
                (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
                (req.headers['x-real-ip']) || 
                req.socket.remoteAddress;
+
+    console.log(`[RequestID: ${requestId}] Processing request for ${userIp}`);
 
     // Add debug logging
     console.log('IP Headers:', {
@@ -340,7 +343,8 @@ async function handler(req, res) {
                     processingTime: `${processingTime}ms`,
                     responseContent: formattedResponse,
                     headers: req.headers,
-                    cacheHit: true
+                    cacheHit: true,
+                    requestId: requestId
                 });
                 
                 // Send cached response
@@ -442,7 +446,8 @@ async function handler(req, res) {
                     endpoint: 'programs',
                     query: req.query.query,
                     collection: 'seattleu~ds-programs',
-                    profile: req.query.profile || '_default'
+                    profile: req.query.profile || '_default',
+                    requestId: requestId
                 });
                 
                 // Use the 'programs' endpoint identifier to match retrieval
@@ -461,7 +466,8 @@ async function handler(req, res) {
             processingTime: `${processingTime}ms`,
             responseContent: formattedResponse,
             headers: req.headers,
-            cacheHit: false
+            cacheHit: false,
+            requestId: requestId
         });
 
         // Send the formatted response
