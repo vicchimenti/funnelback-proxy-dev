@@ -19,10 +19,10 @@
  * at the edge before requests reach serverless functions.
  * 
  * @author Victor Chimenti
- * @version 2.0.0
+ * @version 2.1.1
  * @environment development
  * @status in-progress
- * @lastModified 2025-03-16
+ * @lastModified 2025-03-21
  * @module middleware
  * @license MIT
  */
@@ -47,18 +47,20 @@ const WINDOW_MS = 60 * 1000; // 1 minute
  * @type {Object}
  * @property {number} search - Limit for search endpoints
  * @property {number} suggest - Limit for suggestion endpoints (higher to support typing)
+ * @property {number} suggestPeople - Limit for people suggestion endpoints 
+ * @property {number} suggestPrograms - Limit for programs suggestion endpoints
  * @property {number} analytics - Limit for analytics collection endpoints
- * @property {number} dashboard - Limit for admin dashboard endpoints
  * @property {number} default - Default limit for all other endpoints
  * @constant
  * @private
  */
 const LIMITS = {
-  search: 30,     // Search endpoints
-  suggest: 60,    // Suggestion endpoints (higher limit for typing)
-  analytics: 50,  // Analytics endpoints
-  dashboard: 20,  // Admin dashboard endpoints
-  default: 30     // Default for any other endpoints
+  search: 60,           // Search endpoints
+  suggest: 60,          // General suggestion endpoints
+  suggestPeople: 60,    // People suggestion endpoints
+  suggestPrograms: 60,  // Program suggestion endpoints
+  analytics: 50,        // Analytics endpoints
+  default: 30           // Default for any other endpoints
 };
 
 /**
@@ -105,17 +107,19 @@ export default async function middleware(request) {
   
   // Determine appropriate rate limit based on endpoint type
   let rateLimit = LIMITS.default;
-  
-  if (path.includes('/proxy/funnelback/suggest') || path.includes('/proxy/suggestPeople') || path.includes('/proxy/suggestPrograms')) {
+
+  if (path.includes('/proxy/funnelback/suggest')) {
     rateLimit = LIMITS.suggest;
+  } else if (path.includes('/proxy/suggestPeople')) {
+    rateLimit = LIMITS.suggestPeople;
+  } else if (path.includes('/proxy/suggestPrograms')) {
+    rateLimit = LIMITS.suggestPrograms;
   } else if (path.includes('/proxy/funnelback/search') || path.includes('/proxy/funnelback/spelling')) {
     rateLimit = LIMITS.search;
   } else if (path.includes('/proxy/analytics') || path.includes('/api/analytics')) {
     rateLimit = LIMITS.analytics;
-  } else if (path.includes('/dashboard') || path.includes('/api/queryCount')) {
-    rateLimit = LIMITS.dashboard;
   }
-  
+
   // Initialize or get current rate limit data
   if (!ipCache.has(clientIp)) {
     ipCache.set(clientIp, {
@@ -213,7 +217,6 @@ export const config = {
   matcher: [
     // All API endpoints
     '/proxy/:path*',
-    '/api/:path*',
-    '/dashboard/:path*'
+    '/api/:path*'
   ]
 };
