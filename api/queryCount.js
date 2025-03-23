@@ -1,6 +1,41 @@
+/**
+ * @fileoverview MongoDB Connection Status Checker
+ * 
+ * This module provides an API endpoint that checks MongoDB connectivity
+ * and reports basic database status information. It's designed for monitoring
+ * database health and verifying configuration without accessing or modifying
+ * actual data.
+ * 
+ * Features:
+ * - Connection testing with timeout protection
+ * - Collection existence verification
+ * - Database metadata reporting
+ * - Graceful error handling with detailed status codes
+ * - CORS support for diagnostic interfaces
+ * 
+ * Used by monitoring dashboards and deployment verification processes
+ * to confirm database availability and proper configuration.
+ * 
+ * @author Victor Chimenti
+ * @version 1.1.0
+ * @namespace mongoStatus
+ * @module api/queryCount
+ * @license MIT
+ * @lastModified 2025-03-23
+ */
+
 // api/queryCount.js
 const mongoose = require('mongoose');
 
+/**
+ * API handler function for MongoDB connection status checking
+ * 
+ * @async
+ * @function handler
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @returns {Promise<void>} - Resolves when response has been sent
+ */
 async function handler(req, res) {
   try {
     // Set CORS headers
