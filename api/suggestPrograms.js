@@ -20,7 +20,7 @@
  * - Enhanced analytics with GeoIP integration
  * - Session tracking
  * 
- * @author Victor Chimenti, Team
+ * @author Victor Chimenti
  * @version 4.2.7
  * @namespace suggestPrograms
  * @license MIT
