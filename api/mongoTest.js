@@ -1,7 +1,43 @@
+/**
+ * @fileoverview MongoDB Schema Compatibility Tester
+ * 
+ * This module provides a diagnostic endpoint that tests MongoDB connectivity,
+ * schema compatibility, and performs basic CRUD operations to verify the
+ * database is correctly configured and accessible. It's designed for
+ * monitoring and deployment verification.
+ * 
+ * Features:
+ * - Connection testing with timeout protection
+ * - Schema validation through test document creation
+ * - Document count verification
+ * - Recent queries retrieval
+ * - Connection state reporting
+ * - Comprehensive error handling
+ * 
+ * Used during deployment processes and by monitoring systems to verify
+ * that database models and schemas are correctly functioning.
+ * 
+ * @author Victor Chimenti
+ * @version 1.2.0
+ * @namespace mongoTest
+ * @module api/mongoTest
+ * @license MIT
+ * @lastModified 2025-03-23
+ */
+
 // api/mongoTest.js
 const mongoose = require('mongoose');
 const { Query } = require('../lib/queryAnalytics');
 
+/**
+ * API handler for MongoDB schema compatibility testing
+ * 
+ * @async
+ * @function handler
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @returns {Promise<void>} - Resolves when response has been sent
+ */
 async function handler(req, res) {
   try {
     // Set CORS headers
