@@ -21,10 +21,10 @@
  * - Session tracking
  * 
  * @author Victor Chimenti
- * @version 4.2.7
+ * @version 4.3.0
  * @namespace suggestPrograms
  * @license MIT
- * @lastModified 2025-03-20
+ * @lastModified 2025-03-24
  */
 
 const axios = require('axios');
@@ -123,7 +123,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-programs',
-        version: '4.2.0',
+        version: '4.3.0',
         timestamp: new Date().toISOString(),
         level,
         message,
@@ -226,11 +226,23 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedRespo
                 timestamp: new Date(),
                 clickedResults: [], // Initialize empty array to ensure field exists
                 enrichmentData: {
-                    cacheHit: cacheHit || false,
-                    totalResults: (formattedResponse && formattedResponse.metadata) ? formattedResponse.metadata.totalResults : 0,
-                    queryTime: (formattedResponse && formattedResponse.metadata) ? formattedResponse.metadata.queryTime : 0
+                    totalResults: (formattedResponse && formattedResponse.metadata) ? 
+                        formattedResponse.metadata.totalResults : 0,
+                    programData: formattedResponse && formattedResponse.programs ? 
+                        formattedResponse.programs.slice(0, 3).map(prog => ({
+                            title: prog.title || '',
+                            type: prog.details?.type || '',
+                            school: prog.details?.school || '',
+                            url: prog.url || ''
+                        })) : [],
+                    queryTime: (formattedResponse && formattedResponse.metadata) ? 
+                        formattedResponse.metadata.queryTime : 0,
+                    cacheHit: cacheHit || false
                 }
             };
+            
+            // Log the enrichment data explicitly
+            console.log('Enrichment data for MongoDB:', JSON.stringify(rawData.enrichmentData));
             
             // Standardize data to ensure consistent schema
             const analyticsData = createStandardAnalyticsData(rawData);
@@ -245,17 +257,21 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedRespo
                 if (recordResult && recordResult._id) {
                     console.log('Analytics record ID:', recordResult._id.toString());
                 }
+                return recordResult;
             } catch (recordError) {
                 console.error('Error recording analytics:', recordError.message);
                 if (recordError.name === 'ValidationError') {
                     console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
                 }
+                return null;
             }
         } else {
             console.log('No MongoDB URI defined, skipping analytics recording');
+            return null;
         }
     } catch (analyticsError) {
         console.error('Analytics error:', analyticsError);
+        return null;
     }
 }
 
