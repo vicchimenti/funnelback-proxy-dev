@@ -18,7 +18,7 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.4.1
+* @version 4.4.2
 * @namespace suggestionHandler
 * @license MIT
 * @lastModified 2025-03-24
@@ -488,23 +488,13 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
                 isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
                 tabs: [],
                 sessionId: sessionId,
-                clickedResults: [], // Ensure field exists
+                clickedResults: [],
                 enrichmentData: {
-                    totalSuggestions: Array.isArray(enrichedResponse) ? enrichedResponse.length : 0,
-                    suggestionsData: (() => {
-                        try {
-                            if (Array.isArray(enrichedResponse)) {
-                                return enrichedResponse.map(s => ({
-                                    display: s.display || s.toString() || '',
-                                    tabs: Array.isArray(s.metadata?.tabs) ? s.metadata.tabs : []
-                                }));
-                            }
-                            return [];
-                        } catch (err) {
-                            console.error('Error mapping suggestion data:', err);
-                            return [];
-                        }
-                    })(),
+                    totalSuggestions: enrichedResponse ? enrichedResponse.length : 0,
+                    suggestionsData: enrichedResponse ? enrichedResponse.map(s => ({
+                        display: s.display || '',
+                        tabs: s.metadata?.tabs || []
+                    })) : [],
                     cacheHit: cacheHit || false
                 },
                 timestamp: new Date()
