@@ -490,11 +490,21 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
                 sessionId: sessionId,
                 clickedResults: [], // Ensure field exists
                 enrichmentData: {
-                    totalSuggestions: enrichedResponse ? enrichedResponse.length : 0,
-                    suggestionsData: enrichedResponse ? enrichedResponse.map(s => ({
-                        display: s.display || '',
-                        tabs: s.metadata?.tabs || []
-                    })) : [],
+                    totalSuggestions: Array.isArray(enrichedResponse) ? enrichedResponse.length : 0,
+                    suggestionsData: (() => {
+                        try {
+                            if (Array.isArray(enrichedResponse)) {
+                                return enrichedResponse.map(s => ({
+                                    display: s.display || s.toString() || '',
+                                    tabs: Array.isArray(s.metadata?.tabs) ? s.metadata.tabs : []
+                                }));
+                            }
+                            return [];
+                        } catch (err) {
+                            console.error('Error mapping suggestion data:', err);
+                            return [];
+                        }
+                    })(),
                     cacheHit: cacheHit || false
                 },
                 timestamp: new Date()
