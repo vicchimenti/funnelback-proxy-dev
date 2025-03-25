@@ -17,7 +17,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 4.3.5
+ * @version 4.3.6
  * @namespace suggestPeople
  * @lastmodified 2025-03-25
  * @license MIT
@@ -94,7 +94,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-people',
-        logVersion: '4.3.0',
+        logVersion: '4.3.6',
         timestamp: new Date().toISOString(),
         event: {
             level,
@@ -141,8 +141,10 @@ function cleanTitle(title = '') {
  * @param {number} startTime - Request start time
  * @param {Array} formattedResults - The formatted results
  * @param {boolean} cacheHit - Whether response was served from cache
+ * @param {boolean} cacheResult - Whether caching was successful
+ * @returns {Promise<Object>} The result of the analytics recording
  */
-async function recordQueryAnalytics(req, locationData, startTime, formattedResults, cacheHit) {
+async function recordQueryAnalytics(req, locationData, startTime, formattedResults, cacheHit, cacheResult) {
     try {
         console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
         
@@ -174,7 +176,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedResul
                 resultCount: resultCount,
                 hasResults: resultCount > 0,
                 cacheHit: cacheHit,
-                cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null,
+                cacheSet: cacheResult,
                 isStaffTab: true,
                 tabs: ['Faculty & Staff'],
                 sessionId: sessionId,
@@ -187,7 +189,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedResul
                         url: staff.url || ''
                     })) : [],
                     cacheHit: cacheHit || false,
-                    cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null,
+                    cacheSet: cacheResult || false,
                 },
                 timestamp: new Date()
             };
@@ -260,6 +262,7 @@ async function handler(req, res) {
                      req.query.query.length >= 3;
     
     let cacheHit = false;
+    let cacheResult = null;
     let formattedResults = null;
     const locationData = await getLocationData(userIp);
     console.log('GeoIP location data:', locationData);
@@ -290,7 +293,7 @@ async function handler(req, res) {
                 res.send(formattedResults);
                 
                 // Get location data and record analytics (in background)
-                recordQueryAnalytics(req, locationData, startTime, formattedResults, true);
+                recordQueryAnalytics(req, locationData, startTime, formattedResults, true, null);
                 return; // Exit early since response already sent
             }
         } catch (cacheError) {
@@ -418,10 +421,11 @@ async function handler(req, res) {
                     requestId: requestId
                 });
                 
-                const cacheResult = await setCachedData('people', req.query, formattedResults, requestId);
+                cacheResult = await setCachedData('people', req.query, formattedResults, requestId);
                 console.log(`DEBUG - People cache set result: ${cacheResult}`);
             } catch (cacheSetError) {
                 console.error('DEBUG - Error setting people cache:', cacheSetError);
+                cacheResult = false;
             }
         }
 
@@ -430,7 +434,7 @@ async function handler(req, res) {
         res.send(formattedResults);
         
         // Record analytics (in background)
-        recordQueryAnalytics(req, locationData, startTime, formattedResults, false);
+        recordQueryAnalytics(req, locationData, startTime, formattedResults, false, cacheResult);
 
     } catch (error) {
         // Log detailed error information
