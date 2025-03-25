@@ -21,7 +21,7 @@
  * - Session tracking
  * 
  * @author Victor Chimenti
- * @version 4.3.5
+ * @version 4.3.6
  * @namespace suggestPrograms
  * @license MIT
  * @lastModified 2025-03-25
@@ -123,7 +123,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-programs',
-        version: '4.3.5',
+        version: '4.3.6',
         timestamp: new Date().toISOString(),
         level,
         message,
@@ -188,7 +188,7 @@ function logEvent(level, message, data = {}) {
  * @param {Object} formattedResponse - The formatted response data
  * @param {boolean} cacheHit - Whether response was served from cache
  */
-async function recordQueryAnalytics(req, locationData, startTime, formattedResponse, cacheHit) {
+async function recordQueryAnalytics(req, locationData, startTime, formattedResponse, cacheHit, cacheResult) {
     try {
         console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
         
@@ -220,7 +220,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedRespo
                 resultCount: resultCount,
                 hasResults: resultCount > 0,
                 cacheHit: cacheHit,
-                cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null,
+                cacheSet: cacheResult,
                 isProgramTab: true,
                 isStaffTab: false,
                 tabs: ['program-main'],
@@ -240,7 +240,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedRespo
                     queryTime: (formattedResponse && formattedResponse.metadata) ? 
                         formattedResponse.metadata.queryTime : 0,
                     cacheHit: cacheHit || false,
-                    cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null,
+                    cacheSet: cacheResult || false,
                 }
             };
             
@@ -338,6 +338,7 @@ async function handler(req, res) {
                      req.query.query.length >= 3;
     
     let cacheHit = false;
+    let cacheResult = null;
     let formattedResponse = null;
     
     // Get location data based on the user's IP first
@@ -371,7 +372,7 @@ async function handler(req, res) {
                 res.send(formattedResponse);
                 
                 // Record analytics in background (now locationData is available)
-                recordQueryAnalytics(req, locationData, startTime, formattedResponse, true);
+                recordQueryAnalytics(req, locationData, startTime, formattedResponse, true, null);
                 return; // Exit early since response already sent
             }
         } catch (cacheError) {
@@ -469,11 +470,11 @@ async function handler(req, res) {
                     requestId: requestId
                 });
                 
-                // Use 'programs' endpoint identifier
-                const cacheResult = await setCachedData('programs', req.query, formattedResponse, requestId);
+                cacheResult = await setCachedData('programs', req.query, formattedResponse, requestId);
                 console.log(`DEBUG - Programs cache set result: ${cacheResult}`);
             } catch (cacheSetError) {
                 console.error('DEBUG - Error setting programs cache:', cacheSetError);
+                cacheResult = false;
             }
         }
         const processingTime = Date.now() - startTime;
@@ -494,7 +495,7 @@ async function handler(req, res) {
         res.send(formattedResponse);
         
         // Record analytics in background
-        recordQueryAnalytics(req, locationData, startTime, formattedResponse, false);
+        recordQueryAnalytics(req, locationData, startTime, formattedResponse, false, cacheResult);
         
     } catch (error) {
         const errorResponse = {
