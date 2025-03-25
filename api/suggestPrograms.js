@@ -21,7 +21,7 @@
  * - Session tracking
  * 
  * @author Victor Chimenti
- * @version 4.3.1
+ * @version 4.3.3
  * @namespace suggestPrograms
  * @license MIT
  * @lastModified 2025-03-25
@@ -123,7 +123,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-programs',
-        version: '4.3.1',
+        version: '4.3.3',
         timestamp: new Date().toISOString(),
         level,
         message,
@@ -220,6 +220,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedRespo
                 resultCount: resultCount,
                 hasResults: resultCount > 0,
                 cacheHit: cacheHit,
+                cacheSet: canUseCache ? (cacheResult || false) : null,
                 isProgramTab: true,
                 isStaffTab: false,
                 tabs: ['program-main'],
@@ -238,7 +239,8 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedRespo
                         })) : [],
                     queryTime: (formattedResponse && formattedResponse.metadata) ? 
                         formattedResponse.metadata.queryTime : 0,
-                    cacheHit: cacheHit || false
+                    cacheHit: cacheHit || false,
+                    cacheSet: canUseCache ? (cacheResult || false) : null
                 }
             };
             
@@ -467,7 +469,7 @@ async function handler(req, res) {
                     requestId: requestId
                 });
                 
-                // Use the 'programs' endpoint identifier to match retrieval
+                // Use 'programs' endpoint identifier
                 const cacheResult = await setCachedData('programs', req.query, formattedResponse, requestId);
                 console.log(`DEBUG - Programs cache set result: ${cacheResult}`);
             } catch (cacheSetError) {

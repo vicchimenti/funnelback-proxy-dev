@@ -18,7 +18,7 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.4.3
+* @version 4.4.5
 * @namespace suggestionHandler
 * @license MIT
 * @lastModified 2025-03-25
@@ -391,9 +391,8 @@ async function handler(req, res) {
                     requestId: requestId
                 });
                 
-                // Use the suggestions endpoint identifier to match with the retrieval
                 const cacheResult = await setCachedData('suggestions', req.query, enrichedResponse, requestId);
-                console.log(`DEBUG - Cache set result: ${cacheResult}`);
+                console.log(`DEBUG - Suggestions cache set result: ${cacheResult}`);
             } catch (cacheSetError) {
                 console.error('DEBUG - Error setting cache:', cacheSetError);
             }
@@ -485,6 +484,7 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
                 resultCount: enrichedResponse.length || 0,
                 hasResults: enrichedResponse.length > 0,
                 cacheHit: cacheHit,
+                cacheSet: willUseCache ? (cacheResult || false) : null,
                 isProgramTab: Boolean(req.query['f.Tabs|programMain']),
                 isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
                 tabs: [],
@@ -496,7 +496,8 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
                         display: s.display || '',
                         tabs: s.metadata?.tabs || []
                     })) : [],
-                    cacheHit: cacheHit || false
+                    cacheHit: cacheHit || false,
+                    cacheSet: willUseCache ? (cacheResult || false) : null
                 },
                 timestamp: new Date()
             };

@@ -17,7 +17,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 4.3.1
+ * @version 4.3.3
  * @namespace suggestPeople
  * @lastmodified 2025-03-25
  * @license MIT
@@ -174,6 +174,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedResul
                 resultCount: resultCount,
                 hasResults: resultCount > 0,
                 cacheHit: cacheHit,
+                cacheSet: canUseCache ? (cacheResult || false) : null, // Track cache storage success
                 isStaffTab: true,
                 tabs: ['Faculty & Staff'],
                 sessionId: sessionId,
@@ -185,7 +186,8 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedResul
                         department: staff.department || staff.college || '',
                         url: staff.url || ''
                     })) : [],
-                    cacheHit: cacheHit || false
+                    cacheHit: cacheHit || false,
+                    cacheSet: canUseCache ? (cacheResult || false) : null
                 },
                 timestamp: new Date()
             };
@@ -416,7 +418,6 @@ async function handler(req, res) {
                     requestId: requestId
                 });
                 
-                // Use the 'people' endpoint identifier to match retrieval
                 const cacheResult = await setCachedData('people', req.query, formattedResults, requestId);
                 console.log(`DEBUG - People cache set result: ${cacheResult}`);
             } catch (cacheSetError) {
