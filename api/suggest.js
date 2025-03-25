@@ -18,7 +18,7 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.4.6
+* @version 4.4.8
 * @namespace suggestionHandler
 * @license MIT
 * @lastModified 2025-03-25
@@ -265,11 +265,11 @@ async function handler(req, res) {
         canUseCache
     });
 
-    // Create a stable copy
-    const willUseCache = canUseCache; 
-    console.log(`DEBUG - Cache decision locked: ${willUseCache}`);
+   // Create a stable copy
+   const willUseCache = canUseCache; 
    let cacheHit = false;
    let enrichedResponse = null;
+   let cacheResult = null;
    
    // Try to get data from cache first
    if (canUseCache) {
@@ -343,7 +343,7 @@ async function handler(req, res) {
    if (cacheHit) {
        console.log(`DEBUG - Cache hit handling - skipping Funnelback request`);
        const locationData = await getLocationData(userIp);
-       recordQueryAnalytics(req, locationData, startTime, enrichedResponse, true);
+       recordQueryAnalytics(req, locationData, startTime, enrichedResponse, true, null);
        return; // Exit early since response already sent
    }
 
@@ -379,22 +379,12 @@ async function handler(req, res) {
         enrichedResponse = enrichSuggestions(responseData, req.query);
 
         if (willUseCache && enrichedResponse && enrichedResponse.length > 0) {
-            console.log(`DEBUG - Storing enriched response in cache, length: ${enrichedResponse.length}`);
-            
             try {
-                // Add logging for the exact key being used
-                console.log(`DEBUG - Cache key parameters:`, {
-                    endpoint: 'suggestions',
-                    collection: req.query.collection || 'seattleu~sp-search',
-                    profile: req.query.profile || '_default',
-                    query: req.query.query || req.query.partial_query,
-                    requestId: requestId
-                });
-                
-                const cacheResult = await setCachedData('suggestions', req.query, enrichedResponse, requestId);
+                cacheResult = await setCachedData('suggestions', req.query, enrichedResponse, requestId);
                 console.log(`DEBUG - Suggestions cache set result: ${cacheResult}`);
             } catch (cacheSetError) {
                 console.error('DEBUG - Error setting cache:', cacheSetError);
+                cacheResult = false;
             }
         } else {
             console.log(`DEBUG - Skipping cache storage, willUseCache: ${willUseCache}, resultsLength: ${enrichedResponse.length}`);
@@ -415,7 +405,7 @@ async function handler(req, res) {
 
         // Record analytics data
         console.log(`DEBUG - Recording analytics`);
-        await recordQueryAnalytics(req, locationData, startTime, enrichedResponse, false);
+        await recordQueryAnalytics(req, locationData, startTime, enrichedResponse, false, cacheResult);
   
         // Send response to client
         console.log(`DEBUG - Sending response to client, length: ${enrichedResponse.length}`);
@@ -452,8 +442,9 @@ async function handler(req, res) {
  * @param {number} startTime - Request start time
  * @param {Array} enrichedResponse - The response data
  * @param {boolean} cacheHit - Whether the response was served from cache
+ * @param {boolean} cacheResult - Whether the response was cached successfully
  */
-async function recordQueryAnalytics(req, locationData, startTime, enrichedResponse, cacheHit) {
+async function recordQueryAnalytics(req, locationData, startTime, enrichedResponse, cacheHit, cacheResult) {
     try {
         console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
         
@@ -484,7 +475,7 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
                 resultCount: enrichedResponse.length || 0,
                 hasResults: enrichedResponse.length > 0,
                 cacheHit: cacheHit,
-                cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null,
+                cacheSet: cacheResult,
                 isProgramTab: Boolean(req.query['f.Tabs|programMain']),
                 isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
                 tabs: [],
@@ -497,7 +488,7 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
                         tabs: s.metadata?.tabs || []
                     })) : [],
                     cacheHit: cacheHit || false,
-                    cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null
+                    cacheSet: cacheResult || false
                 },
                 timestamp: new Date()
             };
