@@ -18,10 +18,10 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.4.2
+* @version 4.4.3
 * @namespace suggestionHandler
 * @license MIT
-* @lastModified 2025-03-24
+* @lastModified 2025-03-25
 */
 
 const axios = require('axios');
@@ -484,6 +484,7 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
                 responseTime: processingTime,
                 resultCount: enrichedResponse.length || 0,
                 hasResults: enrichedResponse.length > 0,
+                cacheHit: cacheHit,
                 isProgramTab: Boolean(req.query['f.Tabs|programMain']),
                 isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
                 tabs: [],

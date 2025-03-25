@@ -21,10 +21,10 @@
  * - Session tracking
  * 
  * @author Victor Chimenti
- * @version 4.3.0
+ * @version 4.3.1
  * @namespace suggestPrograms
  * @license MIT
- * @lastModified 2025-03-24
+ * @lastModified 2025-03-25
  */
 
 const axios = require('axios');
@@ -123,7 +123,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-programs',
-        version: '4.3.0',
+        version: '4.3.1',
         timestamp: new Date().toISOString(),
         level,
         message,
@@ -219,12 +219,13 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedRespo
                 responseTime: processingTime,
                 resultCount: resultCount,
                 hasResults: resultCount > 0,
-                isProgramTab: true,  // This is specifically for program searches
+                cacheHit: cacheHit,
+                isProgramTab: true,
                 isStaffTab: false,
                 tabs: ['program-main'],
                 sessionId: sessionId,
                 timestamp: new Date(),
-                clickedResults: [], // Initialize empty array to ensure field exists
+                clickedResults: [],
                 enrichmentData: {
                     totalResults: (formattedResponse && formattedResponse.metadata) ? 
                         formattedResponse.metadata.totalResults : 0,

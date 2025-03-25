@@ -17,9 +17,9 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 4.3.0
+ * @version 4.3.1
  * @namespace suggestPeople
- * @lastmodified 2025-03-24
+ * @lastmodified 2025-03-25
  * @license MIT
  */
 
@@ -172,6 +172,8 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedResul
                 timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
                 responseTime: processingTime,
                 resultCount: resultCount,
+                hasResults: resultCount > 0,
+                cacheHit: cacheHit,
                 isStaffTab: true,
                 tabs: ['Faculty & Staff'],
                 sessionId: sessionId,
@@ -187,7 +189,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedResul
                 },
                 timestamp: new Date()
             };
-            
+                        
             // Log the enrichment data explicitly
             console.log('Enrichment data for MongoDB:', JSON.stringify(rawData.enrichmentData));
             
