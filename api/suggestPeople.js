@@ -17,7 +17,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 4.3.4
+ * @version 4.3.5
  * @namespace suggestPeople
  * @lastmodified 2025-03-25
  * @license MIT
@@ -174,7 +174,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedResul
                 resultCount: resultCount,
                 hasResults: resultCount > 0,
                 cacheHit: cacheHit,
-                cacheSet: canUseCache ? (cacheResult || false) : null, // Track cache storage success
+                cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null,
                 isStaffTab: true,
                 tabs: ['Faculty & Staff'],
                 sessionId: sessionId,

@@ -21,7 +21,7 @@
  * - Session tracking
  * 
  * @author Victor Chimenti
- * @version 4.3.4
+ * @version 4.3.5
  * @namespace suggestPrograms
  * @license MIT
  * @lastModified 2025-03-25
@@ -123,7 +123,7 @@ function logEvent(level, message, data = {}) {
 
     const logEntry = {
         service: 'suggest-programs',
-        version: '4.3.3',
+        version: '4.3.5',
         timestamp: new Date().toISOString(),
         level,
         message,
@@ -220,7 +220,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedRespo
                 resultCount: resultCount,
                 hasResults: resultCount > 0,
                 cacheHit: cacheHit,
-                cacheSet: canUseCache ? (cacheResult || false) : null,
+                cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null,
                 isProgramTab: true,
                 isStaffTab: false,
                 tabs: ['program-main'],
