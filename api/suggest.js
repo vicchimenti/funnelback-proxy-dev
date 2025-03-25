@@ -18,7 +18,7 @@
 * - Consistent schema handling
 * 
 * @author Victor Chimenti
-* @version 4.4.5
+* @version 4.4.6
 * @namespace suggestionHandler
 * @license MIT
 * @lastModified 2025-03-25
@@ -484,7 +484,7 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
                 resultCount: enrichedResponse.length || 0,
                 hasResults: enrichedResponse.length > 0,
                 cacheHit: cacheHit,
-                cacheSet: willUseCache ? (cacheResult || false) : null,
+                cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null,
                 isProgramTab: Boolean(req.query['f.Tabs|programMain']),
                 isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
                 tabs: [],
@@ -497,7 +497,7 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
                         tabs: s.metadata?.tabs || []
                     })) : [],
                     cacheHit: cacheHit || false,
-                    cacheSet: willUseCache ? (cacheResult || false) : null
+                    cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null
                 },
                 timestamp: new Date()
             };

@@ -21,7 +21,7 @@
  * - Session tracking
  * 
  * @author Victor Chimenti
- * @version 4.3.3
+ * @version 4.3.4
  * @namespace suggestPrograms
  * @license MIT
  * @lastModified 2025-03-25
@@ -240,7 +240,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedRespo
                     queryTime: (formattedResponse && formattedResponse.metadata) ? 
                         formattedResponse.metadata.queryTime : 0,
                     cacheHit: cacheHit || false,
-                    cacheSet: canUseCache ? (cacheResult || false) : null
+                    cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null,
                 }
             };
             

@@ -17,7 +17,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 4.3.3
+ * @version 4.3.4
  * @namespace suggestPeople
  * @lastmodified 2025-03-25
  * @license MIT
@@ -187,7 +187,7 @@ async function recordQueryAnalytics(req, locationData, startTime, formattedResul
                         url: staff.url || ''
                     })) : [],
                     cacheHit: cacheHit || false,
-                    cacheSet: canUseCache ? (cacheResult || false) : null
+                    cacheSet: typeof cacheResult === 'boolean' ? cacheResult : null,
                 },
                 timestamp: new Date()
             };
