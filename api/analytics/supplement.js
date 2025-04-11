@@ -5,12 +5,11 @@
  * including supplementary analytics data.
  * 
  * @author Victor Chimenti
- * @version 2.0.2
+ * @version 2.1.0
  * @module api/analytics/supplement
- * @lastModified 2025-03-07
+ * @lastModified 2025-04-11
  */
 
-// api/analytics/supplement.js
 module.exports = async (req, res) => {
     const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     
@@ -30,8 +29,9 @@ module.exports = async (req, res) => {
     }
     
     try {
-        const { Query } = require('mongoose').models;
-        const { sanitizeSessionId } = require('../../lib/schemaHandler');
+        // Import queryAnalytics to ensure proper model initialization and DB connection
+        const { recordQuery, Query, connectToMongoDB } = require('../../lib/queryAnalytics');
+        const { sanitizeSessionId, createStandardAnalyticsData } = require('../../lib/schemaHandler');
         const data = req.body || {};
         
         if (!data.query) {
@@ -39,6 +39,9 @@ module.exports = async (req, res) => {
         }
         
         console.log('Processing supplementary analytics for query:', data.query);
+        
+        // Ensure MongoDB connection is established before proceeding
+        await connectToMongoDB();
         
         // Find the most recent query with matching information
         const filters = {
@@ -73,6 +76,12 @@ module.exports = async (req, res) => {
         console.log('Update filters:', filters);
         console.log('Update data:', update);
         
+        // Verify Query model is available
+        if (!Query) {
+            console.error('Query model is not initialized');
+            return res.status(500).json({ error: 'Database model initialization failed' });
+        }
+        
         // Update the query document
         const result = await Query.findOneAndUpdate(
             filters,
@@ -84,14 +93,51 @@ module.exports = async (req, res) => {
         );
         
         if (!result) {
-            console.log('No matching query found for supplementary data');
-            return res.status(404).json({ error: 'Query not found' });
+            console.log('No matching query found for supplementary data, creating new record');
+            
+            // Create standardized data object for new record
+            const newQueryData = {
+                handler: 'supplement-only',
+                query: data.query,
+                userIp: userIp,
+                userAgent: req.headers['user-agent'],
+                referer: req.headers.referer,
+                sessionId: sessionId,
+                city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+                region: req.headers['x-vercel-ip-country-region'],
+                country: req.headers['x-vercel-ip-country'],
+                timestamp: new Date()
+            };
+            
+            // Add enrichment data if provided
+            if (data.enrichmentData) {
+                newQueryData.enrichmentData = data.enrichmentData;
+            }
+            
+            // Add result count if provided
+            if (data.resultCount !== undefined) {
+                newQueryData.resultCount = data.resultCount;
+                newQueryData.hasResults = data.resultCount > 0;
+            }
+            
+            // Create and save new record
+            const newQuery = new Query(newQueryData);
+            await newQuery.save();
+            
+            console.log('Created new record for supplementary data. Record ID:', newQuery._id.toString());
+            return res.status(200).json({ success: true, recordId: newQuery._id.toString(), created: true });
         }
         
         console.log('Supplementary data recorded successfully. Record ID:', result._id.toString());
-        res.status(200).json({ success: true, recordId: result._id.toString() });
+        res.status(200).json({ success: true, recordId: result._id.toString(), updated: true });
     } catch (error) {
         console.error('Error recording supplementary analytics:', error);
-        res.status(500).json({ error: error.message });
+        // Provide more detailed error information
+        const errorDetails = {
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+            type: error.name
+        };
+        res.status(500).json(errorDetails);
     }
 };
