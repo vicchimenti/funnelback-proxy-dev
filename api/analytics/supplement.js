@@ -5,11 +5,12 @@
  * including supplementary analytics data.
  * 
  * @author Victor Chimenti
- * @version 2.1.0
+ * @version 2.1.1
  * @module api/analytics/supplement
  * @lastModified 2025-04-11
  */
 
+// api/analytics/supplement.js
 module.exports = async (req, res) => {
     const userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     
@@ -29,9 +30,9 @@ module.exports = async (req, res) => {
     }
     
     try {
-        // Import queryAnalytics to ensure proper model initialization and DB connection
-        const { recordQuery, Query, connectToMongoDB } = require('../../lib/queryAnalytics');
-        const { sanitizeSessionId, createStandardAnalyticsData } = require('../../lib/schemaHandler');
+        // Import only the exported functions from queryAnalytics
+        const { recordQuery } = require('../../lib/queryAnalytics');
+        const { sanitizeSessionId } = require('../../lib/schemaHandler');
         const data = req.body || {};
         
         if (!data.query) {
@@ -40,96 +41,50 @@ module.exports = async (req, res) => {
         
         console.log('Processing supplementary analytics for query:', data.query);
         
-        // Ensure MongoDB connection is established before proceeding
-        await connectToMongoDB();
-        
-        // Find the most recent query with matching information
-        const filters = {
-            query: data.query
-        };
-        
-        // Add sessionId to filter if available (properly sanitized)
+        // Get sessionId from request
         const sessionId = sanitizeSessionId(data.sessionId);
-        if (sessionId) {
-            filters.sessionId = sessionId;
-            console.log('Using session ID for matching:', sessionId);
-        } else {
-            // Fall back to IP address
-            filters.userIp = userIp;
-            console.log('Using IP address for matching:', userIp);
-        }
         
-        // Prepare update based on provided data
-        const update = {};
+        // Prepare query data object
+        const queryData = {
+            handler: 'supplement',
+            query: data.query,
+            userIp: userIp,
+            userAgent: req.headers['user-agent'],
+            referer: req.headers.referer,
+            sessionId: sessionId,
+            city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
+            region: req.headers['x-vercel-ip-country-region'],
+            country: req.headers['x-vercel-ip-country'],
+            timestamp: new Date()
+        };
         
         // Add result count if provided
         if (data.resultCount !== undefined) {
-            update.resultCount = data.resultCount;
-            update.hasResults = data.resultCount > 0;
+            queryData.resultCount = data.resultCount;
+            queryData.hasResults = data.resultCount > 0;
         }
         
         // Add enrichment data if provided
         if (data.enrichmentData) {
-            update.enrichmentData = data.enrichmentData;
+            queryData.enrichmentData = data.enrichmentData;
         }
         
-        console.log('Update filters:', filters);
-        console.log('Update data:', update);
+        console.log('Query data being recorded:', {
+            query: queryData.query,
+            sessionId: queryData.sessionId || '[none]',
+            hasEnrichment: !!queryData.enrichmentData
+        });
         
-        // Verify Query model is available
-        if (!Query) {
-            console.error('Query model is not initialized');
-            return res.status(500).json({ error: 'Database model initialization failed' });
-        }
-        
-        // Update the query document
-        const result = await Query.findOneAndUpdate(
-            filters,
-            { $set: update },
-            { 
-                new: true,
-                sort: { timestamp: -1 }
-            }
-        );
+        // Use recordQuery to create or update the record
+        const result = await recordQuery(queryData);
         
         if (!result) {
-            console.log('No matching query found for supplementary data, creating new record');
-            
-            // Create standardized data object for new record
-            const newQueryData = {
-                handler: 'supplement-only',
-                query: data.query,
-                userIp: userIp,
-                userAgent: req.headers['user-agent'],
-                referer: req.headers.referer,
-                sessionId: sessionId,
-                city: decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-                region: req.headers['x-vercel-ip-country-region'],
-                country: req.headers['x-vercel-ip-country'],
-                timestamp: new Date()
-            };
-            
-            // Add enrichment data if provided
-            if (data.enrichmentData) {
-                newQueryData.enrichmentData = data.enrichmentData;
-            }
-            
-            // Add result count if provided
-            if (data.resultCount !== undefined) {
-                newQueryData.resultCount = data.resultCount;
-                newQueryData.hasResults = data.resultCount > 0;
-            }
-            
-            // Create and save new record
-            const newQuery = new Query(newQueryData);
-            await newQuery.save();
-            
-            console.log('Created new record for supplementary data. Record ID:', newQuery._id.toString());
-            return res.status(200).json({ success: true, recordId: newQuery._id.toString(), created: true });
+            console.error('Failed to record supplementary analytics');
+            return res.status(500).json({ error: 'Failed to record analytics data' });
         }
         
         console.log('Supplementary data recorded successfully. Record ID:', result._id.toString());
-        res.status(200).json({ success: true, recordId: result._id.toString(), updated: true });
+        res.status(200).json({ success: true, recordId: result._id.toString() });
     } catch (error) {
         console.error('Error recording supplementary analytics:', error);
         // Provide more detailed error information
