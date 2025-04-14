@@ -52,6 +52,9 @@ module.exports = async (req, res) => {
 
         const clickData = req.body || {};
 
+        console.log('Raw request body:', req.body);
+        console.log('Request content type:', req.headers['content-type']);
+
         // Log received fields for debugging
         console.log('Received click data fields:', Object.keys(clickData));
 
