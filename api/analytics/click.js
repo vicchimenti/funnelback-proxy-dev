@@ -5,7 +5,7 @@
  * including click tracking data.
  * 
  * @author Victor Chimenti
- * @version 2.3.2
+ * @version 2.3.3
  * @module api/analytics/click
  * @lastModified 2025-04-14
  */
@@ -52,6 +52,9 @@ module.exports = async (req, res) => {
 
         const clickData = req.body || {};
 
+        // Log received fields for debugging
+        console.log('Received click data fields:', Object.keys(clickData));
+
         // Extract session ID from various sources
         const rawSessionId = clickData.sessionId || req.query.sessionId || req.headers['x-session-id'];
         
@@ -66,10 +69,7 @@ module.exports = async (req, res) => {
             rawSessionId: rawSessionId,
             afterSanitization: sessionId
         });
-        
-        // Log received fields for debugging
-        console.log('Received click data fields:', Object.keys(clickData));
-        
+                
         // Normalize field names to handle variations from different frontend components
         const normalizedClickData = {
             ...clickData,
