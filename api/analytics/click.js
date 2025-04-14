@@ -5,9 +5,9 @@
  * including click tracking data.
  * 
  * @author Victor Chimenti
- * @version 2.3.0
+ * @version 2.3.1
  * @module api/analytics/click
- * @lastModified 2025-03-21
+ * @lastModified 2025-04-14
  */
 
 // api/analytics/click.js
@@ -67,13 +67,34 @@ module.exports = async (req, res) => {
             afterSanitization: sessionId
         });
         
-        // Validate required fields
+        // Log received fields for debugging
+        console.log('Received click data fields:', Object.keys(clickData));
+        
+        // Enhanced validation with more detailed error responses
         if (!clickData.originalQuery) {
-            return res.status(400).json({ error: 'Missing required field: originalQuery' });
+            console.warn('Request missing originalQuery:', Object.keys(clickData));
+            return res.status(400).json({ 
+                error: 'Missing required field: originalQuery',
+                receivedFields: Object.keys(clickData)
+            });
+        }
+        
+        if (clickData.originalQuery === '') {
+            console.warn('Empty originalQuery value received');
+            return res.status(400).json({ error: 'Empty value for required field: originalQuery' });
         }
         
         if (!clickData.clickedUrl) {
-            return res.status(400).json({ error: 'Missing required field: clickedUrl' });
+            console.warn('Request missing clickedUrl:', Object.keys(clickData));
+            return res.status(400).json({ 
+                error: 'Missing required field: clickedUrl',
+                receivedFields: Object.keys(clickData)
+            });
+        }
+        
+        if (clickData.clickedUrl === '') {
+            console.warn('Empty clickedUrl value received');
+            return res.status(400).json({ error: 'Empty value for required field: clickedUrl' });
         }
 
         // Validate and set click type
@@ -133,6 +154,11 @@ module.exports = async (req, res) => {
         res.status(200).json({ success: true });
     } catch (error) {
         console.error('Error recording click:', error);
-        res.status(500).json({ error: error.message });
+        // Provide more detailed error for troubleshooting
+        res.status(500).json({
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+            type: error.name 
+        });
     }
 }
