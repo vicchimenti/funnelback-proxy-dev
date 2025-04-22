@@ -19,10 +19,10 @@
  * at the edge before requests reach serverless functions.
  * 
  * @author Victor Chimenti
- * @version 2.1.1
+ * @version 3.0.0
  * @environment development
  * @status in-progress
- * @lastModified 2025-03-21
+ * @lastModified 2025-04-22
  * @module middleware
  * @license MIT
  */
@@ -81,12 +81,81 @@ function cleanupCache() {
 }
 
 /**
+ * Logs detailed information about IP sources for debugging
+ * 
+ * @param {Request} request - The incoming request object
+ * @param {string} clientIp - The determined client IP
+ * @param {string} requestId - Unique identifier for the request
+ * @private
+ */
+function logIpSources(request, clientIp, requestId) {
+  const allHeaders = {};
+  request.headers.forEach((value, key) => {
+    if (key.toLowerCase().includes('ip') || 
+        key.toLowerCase().includes('forward') || 
+        key.toLowerCase().includes('real') || 
+        key.toLowerCase().includes('client')) {
+      allHeaders[key] = value;
+    }
+  });
+
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    service: 'edge-middleware',
+    requestId,
+    path: new URL(request.url).pathname,
+    ipSources: {
+      determinedClientIp: clientIp,
+      xRealIp: request.headers.get('x-real-ip'),
+      xForwardedFor: request.headers.get('x-forwarded-for'),
+      xVercelProxiedFor: request.headers.get('x-vercel-proxied-for'),
+      xVercelForwardedFor: request.headers.get('x-vercel-forwarded-for'),
+      xOriginalClientIp: request.headers.get('x-original-client-ip')
+    },
+    allRelevantHeaders: allHeaders,
+    userAgent: request.headers.get('user-agent')
+  }));
+}
+
+/**
+ * Logs session information for tracking
+ * 
+ * @param {Request} request - The incoming request object
+ * @param {string} sessionId - The session ID (existing or generated)
+ * @param {boolean} wasGenerated - Whether the session ID was just generated
+ * @param {string} requestId - Unique identifier for the request
+ * @private
+ */
+function logSessionInfo(request, sessionId, wasGenerated, requestId) {
+  const url = new URL(request.url);
+  
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    service: 'edge-middleware',
+    requestId,
+    path: url.pathname,
+    session: {
+      id: sessionId,
+      source: wasGenerated ? 'generated' : 
+              url.searchParams.has('sessionId') ? 'url_param' : 
+              request.headers.get('x-session-id') ? 'header' : 'unknown',
+      wasGenerated
+    },
+    referer: request.headers.get('referer'),
+    userAgent: request.headers.get('user-agent')
+  }));
+}
+
+/**
  * Middleware function that processes requests at the edge
  * 
  * @param {Request} request - The incoming request object
  * @returns {Promise<Response>} The modified response
  */
 export default async function middleware(request) {
+  // Generate request ID for tracing
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  
   // Clean up expired entries
   cleanupCache();
   
@@ -98,10 +167,28 @@ export default async function middleware(request) {
     return fetch(request);
   }
 
+  // Start with logging the incoming request
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    service: 'edge-middleware',
+    requestId,
+    event: 'request_received',
+    method: request.method,
+    path,
+    query: Object.fromEntries(url.searchParams)
+  }));
+
   // Extract client IP from various headers, prioritizing the most likely to be accurate
-  const clientIp = request.headers.get('x-real-ip') || 
-                   request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 
-                   'unknown';
+  // We establish a clear priority order to ensure consistency
+  const clientIp = 
+      request.headers.get('x-original-client-ip') || // Trust previously determined value if present
+      request.headers.get('x-real-ip') ||           // Vercel typically sets this from the actual client
+      (request.headers.get('x-forwarded-for')?.split(',')[0].trim()) || // First IP in the chain
+      request.headers.get('x-vercel-proxied-for') || // Vercel-specific header
+      'unknown';
+  
+  // Log detailed IP source information
+  logIpSources(request, clientIp, requestId);
   
   const now = Date.now();
   
@@ -165,6 +252,19 @@ export default async function middleware(request) {
       response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Origin');
     }
     
+    // Log rate limit exceeded
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      service: 'edge-middleware',
+      requestId,
+      event: 'rate_limit_exceeded',
+      clientIp,
+      path,
+      rateLimit,
+      currentCount: rateData.count,
+      resetTime: new Date(rateData.resetTime).toISOString()
+    }));
+    
     return response;
   }
   
@@ -173,14 +273,46 @@ export default async function middleware(request) {
   
   // Explicitly set clean headers for downstream functions
   requestHeaders.set('x-original-client-ip', clientIp);
+  requestHeaders.set('x-middleware-processed', 'true');
+  requestHeaders.set('x-request-id', requestId);
   
+  // Session ID management with logging
+  let sessionId;
+  let sessionGenerated = false;
+
   // Preserve any sessionId in the URL parameters
   if (url.searchParams.has('sessionId')) {
-    requestHeaders.set('x-session-id', url.searchParams.get('sessionId'));
-  } else if (!url.searchParams.has('sessionId')) {
+    sessionId = url.searchParams.get('sessionId');
+    requestHeaders.set('x-session-id', sessionId);
+  } else if (request.headers.has('x-session-id')) {
+    // Use existing session ID from header if present
+    sessionId = request.headers.get('x-session-id');
+  } else {
     // Generate a unique session ID if one doesn't exist
-    const generatedSessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;    
-    requestHeaders.set('x-session-id', generatedSessionId);
+    sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;    
+    sessionGenerated = true;
+    requestHeaders.set('x-session-id', sessionId);
+  }
+  
+  // Log session handling information
+  logSessionInfo(request, sessionId, sessionGenerated, requestId);
+  
+  // If request appears to be from server-side (axios, etc.), log it specially
+  const userAgent = request.headers.get('user-agent') || '';
+  if (userAgent.includes('axios') || 
+      userAgent.includes('node-fetch') || 
+      userAgent.includes('got') ||
+      userAgent.includes('superagent')) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      service: 'edge-middleware',
+      requestId,
+      event: 'server_side_request_detected',
+      userAgent,
+      clientIp,
+      sessionId,
+      path
+    }));
   }
   
   // Create a new request with modified headers
@@ -192,8 +324,32 @@ export default async function middleware(request) {
     signal: request.signal
   });
   
+  // Log the modified request
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    service: 'edge-middleware',
+    requestId,
+    event: 'request_modified',
+    modifiedHeaders: {
+      'x-original-client-ip': clientIp,
+      'x-middleware-processed': 'true',
+      'x-request-id': requestId,
+      'x-session-id': sessionId
+    }
+  }));
+  
   // For successful requests, proceed with the modified request
   const response = await fetch(newRequest);
+  
+  // Log response status
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    service: 'edge-middleware',
+    requestId,
+    event: 'response_received',
+    status: response.status,
+    path
+  }));
   
   // Clone the response to modify headers
   const newResponse = new Response(response.body, response);
@@ -202,6 +358,7 @@ export default async function middleware(request) {
   newResponse.headers.set('X-RateLimit-Limit', rateLimit.toString());
   newResponse.headers.set('X-RateLimit-Remaining', (rateLimit - rateData.count).toString());
   newResponse.headers.set('X-RateLimit-Reset', rateData.resetTime.toString());
+  newResponse.headers.set('X-Request-ID', requestId);
   
   return newResponse;
 }
