@@ -15,20 +15,19 @@
  * 
  * @author Victor Chimenti
  * @namespace searchHandler
- * @version 4.1.2
+ * @version 4.1.3
  * @license MIT
- * @lastModified 2025-03-20
+ * @lastModified 2025-04-22
  */
 
 const axios = require('axios');
-const { getLocationData } = require('../lib/geoIpService');
+const geoIpService = require('../lib/geoIpService');
 const { recordQuery } = require('../lib/queryAnalytics');
 const { 
     createStandardAnalyticsData, 
     sanitizeSessionId, 
     logAnalyticsData 
 } = require('../lib/schemaHandler');
-
 
 /**
  * Extracts the number of results from an HTML response
@@ -50,6 +49,21 @@ function extractResultCount(htmlContent) {
 }
 
 /**
+ * Extracts client IP from request using consistent priority order
+ * 
+ * @param {Object} req - Express request object
+ * @returns {string} Best available client IP
+ */
+function extractClientIp(req) {
+    return req.headers['x-original-client-ip'] || 
+           req.headers['x-real-ip'] || 
+           (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
+           req.headers['x-vercel-proxied-for'] || 
+           req.socket.remoteAddress || 
+           'unknown';
+}
+
+/**
  * Handler for dedicated search requests.
  * 
  * @param {Object} req - Express request object
@@ -61,25 +75,36 @@ function extractResultCount(htmlContent) {
  */
 async function handler(req, res) {
     const startTime = Date.now();
-    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    const requestId = req.headers['x-request-id'] || `req_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
     
-    // Get client IP from custom header or fallback methods
-    const userIp = req.headers['x-original-client-ip'] || 
-               (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
-               (req.headers['x-real-ip']) || 
-               req.socket.remoteAddress;
+    // Get client IP using consistent extraction function
+    const userIp = extractClientIp(req);
 
-    console.log(`[RequestID: ${requestId}] Processing request for ${userIp}`);
+    console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        service: 'search-handler',
+        requestId,
+        event: 'request_received',
+        path: req.path,
+        query: req.query.query || null,
+        userIp
+    }));
 
-    // Add debug logging
-    console.log('IP Headers:', {
-        originalClientIp: req.headers['x-original-client-ip'],
-        forwardedFor: req.headers['x-forwarded-for'],
-        realIp: req.headers['x-real-ip'],
-        socketRemote: req.socket.remoteAddress,
-        vercelIpCity: req.headers['x-vercel-ip-city'],
-        finalUserIp: userIp
-    });
+    // Log IP Headers for debugging
+    console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        service: 'search-handler',
+        requestId,
+        event: 'ip_headers',
+        headers: {
+            originalClientIp: req.headers['x-original-client-ip'],
+            forwardedFor: req.headers['x-forwarded-for'],
+            realIp: req.headers['x-real-ip'],
+            socketRemote: req.socket.remoteAddress,
+            vercelIpCity: req.headers['x-vercel-ip-city'],
+            finalUserIp: userIp
+        }
+    }));
     
     // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
@@ -95,25 +120,71 @@ async function handler(req, res) {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.html';
 
         // Get location data based on the user's IP
-        const locationData = await getLocationData(userIp);
-        console.log('GeoIP location data:', locationData);
+        let locationData = null;
+        try {
+            locationData = await geoIpService.getLocationData(userIp, requestId);
+            console.log(JSON.stringify({
+                timestamp: new Date().toISOString(),
+                service: 'search-handler',
+                requestId,
+                event: 'geo_lookup_success',
+                location: {
+                    city: locationData.city,
+                    region: locationData.region,
+                    country: locationData.country
+                }
+            }));
+        } catch (geoError) {
+            console.error('Error getting location data:', geoError);
+            console.log(JSON.stringify({
+                timestamp: new Date().toISOString(),
+                service: 'search-handler',
+                requestId,
+                event: 'geo_lookup_error',
+                error: geoError.message
+            }));
+            // Set default location data
+            locationData = {
+                city: null,
+                region: null,
+                country: null,
+                timezone: null
+            };
+        }
 
         const funnelbackHeaders = {
             'Accept': 'text/html',
             'X-Forwarded-For': userIp,
-            'X-Geo-City': locationData.city,
-            'X-Geo-Region': locationData.region,
-            'X-Geo-Country': locationData.country,
-            'X-Geo-Timezone': locationData.timezone
+            'X-Geo-City': locationData.city || '',
+            'X-Geo-Region': locationData.region || '',
+            'X-Geo-Country': locationData.country || '',
+            'X-Geo-Timezone': locationData.timezone || '',
+            'X-Request-ID': requestId
         };
-        console.log('- Outgoing Headers to Funnelback (with actual user location):', funnelbackHeaders);
+
+        console.log(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            service: 'search-handler',
+            requestId,
+            event: 'outgoing_request',
+            url: funnelbackUrl,
+            headers: funnelbackHeaders,
+            params: req.query
+        }));
 
         const response = await axios.get(funnelbackUrl, {
             params: req.query,
             headers: funnelbackHeaders
         });
 
-        console.log('Search response received successfully');
+        console.log(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            service: 'search-handler',
+            requestId,
+            event: 'response_received',
+            status: response.status,
+            contentLength: response.data?.length || 0
+        }));
         
         // Extract the result count from the HTML response
         const resultCount = extractResultCount(response.data);
@@ -121,24 +192,18 @@ async function handler(req, res) {
         
         // Record analytics data
         try {
-            console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
+            console.log(JSON.stringify({
+                timestamp: new Date().toISOString(),
+                service: 'search-handler',
+                requestId,
+                event: 'recording_analytics',
+                query: req.query.query,
+                resultCount
+            }));
             
             if (process.env.MONGODB_URI) {
-                // Extract query from query parameters - looking at both query and partial_query
-                console.log('Raw query parameters:', req.query);
-                console.log('Looking for query in:', req.query.query, req.query.partial_query);
-                
                 // Extract and sanitize session ID
                 const sessionId = sanitizeSessionId(req.query.sessionId || req.headers['x-session-id']);
-                console.log('Extracted session ID:', sessionId);
-
-                // Add detailed session ID debugging
-                console.log('Session ID sources:', {
-                    fromQueryParam: req.query.sessionId,
-                    fromHeader: req.headers['x-session-id'],
-                    fromBody: req.body?.sessionId,
-                    afterSanitization: sessionId
-                });
                 
                 // Create raw analytics data
                 const rawData = {
@@ -159,7 +224,8 @@ async function handler(req, res) {
                     tabs: [],
                     sessionId: sessionId,
                     timestamp: new Date(),
-                    clickedResults: []
+                    clickedResults: [],
+                    requestId
                 };
                 
                 // Add tabs information
@@ -175,21 +241,42 @@ async function handler(req, res) {
                 // Record the analytics
                 try {
                     const recordResult = await recordQuery(analyticsData);
-                    console.log('Analytics record result:', recordResult ? 'Saved' : 'Not saved');
-                    if (recordResult && recordResult._id) {
-                        console.log('Analytics record ID:', recordResult._id.toString());
-                    }
+                    console.log(JSON.stringify({
+                        timestamp: new Date().toISOString(),
+                        service: 'search-handler',
+                        requestId,
+                        event: 'analytics_recorded',
+                        success: !!recordResult,
+                        recordId: recordResult?._id?.toString()
+                    }));
                 } catch (recordError) {
-                    console.error('Error recording analytics:', recordError.message);
-                    if (recordError.name === 'ValidationError') {
-                        console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
-                    }
+                    console.error('Error recording analytics:', recordError);
+                    console.log(JSON.stringify({
+                        timestamp: new Date().toISOString(),
+                        service: 'search-handler',
+                        requestId,
+                        event: 'analytics_record_error',
+                        error: recordError.message
+                    }));
                 }
             } else {
-                console.log('No MongoDB URI defined, skipping analytics recording');
+                console.log(JSON.stringify({
+                    timestamp: new Date().toISOString(),
+                    service: 'search-handler',
+                    requestId,
+                    event: 'analytics_skipped',
+                    reason: 'mongodb_uri_not_defined'
+                }));
             }
         } catch (analyticsError) {
             console.error('Analytics error:', analyticsError);
+            console.log(JSON.stringify({
+                timestamp: new Date().toISOString(),
+                service: 'search-handler',
+                requestId,
+                event: 'analytics_error',
+                error: analyticsError.message
+            }));
         }
         
         res.send(response.data);
@@ -199,6 +286,16 @@ async function handler(req, res) {
             status: error.response?.status,
             data: error.response?.data
         });
+        
+        console.log(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            service: 'search-handler',
+            requestId,
+            event: 'handler_error',
+            error: error.message,
+            status: error.response?.status || 500
+        }));
+        
         res.status(500).send('Search error: ' + (error.response?.data || error.message));
     }
 }
