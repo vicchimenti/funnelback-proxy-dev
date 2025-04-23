@@ -193,7 +193,10 @@ async function handler(req, res) {
     const requestId = commonUtils.getRequestId(req);
     const clientIp = commonUtils.extractClientIp(req);
     
-    // Log request received
+    // Log full IP information for debugging
+    commonUtils.logFullIpInfo(req, 'suggest-handler', requestId);
+    
+    // Standard log with redacted IP (for security/privacy)
     commonUtils.logEvent('info', 'request_received', 'suggest-handler', {
         requestId,
         path: req.path,
