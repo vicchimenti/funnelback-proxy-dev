@@ -19,7 +19,7 @@
  * - Query analytics integration
  * 
  * @author Victor Chimenti
- * @version 5.0.0
+ * @version 5.0.1
  * @namespace suggestionHandler
  * @license MIT
  * @lastModified 2025-04-24
@@ -349,6 +349,11 @@ async function handler(req, res) {
             requestId,
             url: funnelbackUrl,
             query: req.query.query || req.query.partial_query
+        });
+
+        // Log detailed headers for debugging
+        console.log(`- Outgoing Headers to Funnelback:`, {
+            funnelbackHeaders
         });
 
         // Make request to Funnelback

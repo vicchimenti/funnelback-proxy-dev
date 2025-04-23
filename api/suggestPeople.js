@@ -18,7 +18,7 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 5.0.0
+ * @version 5.0.1
  * @namespace suggestPeople
  * @lastmodified 2025-04-24
  * @license MIT
@@ -321,6 +321,11 @@ async function handler(req, res) {
             requestId,
             url: url,
             query: req.query.query || ''
+        });
+
+        // Log detailed headers for debugging
+        console.log(`- Outgoing Headers to Funnelback:`, {
+            funnelbackHeaders
         });
 
         // Make request to Funnelback
