@@ -4,9 +4,10 @@
  * Handles autocomplete suggestion requests for faculty and staff searches with
  * structured logging for Vercel serverless environment. Returns detailed information
  * including affiliation, college, department, and position data.
- * Includes Vercel native Redis caching for improved performance.
+ * Enhanced with consistent IP tracking, session management, and improved error handling.
  * 
  * Features:
+ * - Consistent IP tracking using commonUtils
  * - Redis caching for fast response times 
  * - CORS handling for Seattle University domain
  * - Structured JSON logging for Vercel
@@ -17,108 +18,30 @@
  * - Analytics integration
  * 
  * @author Victor Chimenti
- * @version 4.3.6
+ * @version 5.0.0
  * @namespace suggestPeople
- * @lastmodified 2025-03-25
+ * @lastmodified 2025-04-24
  * @license MIT
  */
 
 const axios = require('axios');
-const os = require('os');
 const { getLocationData } = require('../lib/geoIpService');
 const { recordQuery } = require('../lib/queryAnalytics');
-const { 
-    createStandardAnalyticsData, 
-    sanitizeSessionId, 
-    logAnalyticsData 
+const commonUtils = require('../lib/commonUtils');
+const {
+    createStandardAnalyticsData,
+    createRequestAnalytics,
+    logAnalyticsData
 } = require('../lib/schemaHandler');
-const { 
-    getCachedData, 
-    setCachedData, 
+const {
+    getCachedData,
+    setCachedData,
     isCachingEnabled,
     logCacheHit,
     logCacheMiss,
-    logCacheError
+    logCacheError,
+    logCacheSet
 } = require('../lib/cacheService');
-
-/**
- * Creates a standardized log entry for Vercel environment
- * 
- * @param {string} level - Log level ('info', 'warn', 'error')
- * @param {string} message - Main log message/action
- * @param {Object} data - Additional data to include in log
- * @param {boolean} [data.cacheHit] - Whether data was served from cache
- */
-function logEvent(level, message, data = {}) {
-    const serverInfo = {
-        hostname: os.hostname(),
-        platform: os.platform(),
-        arch: os.arch(),
-        cpus: os.cpus().length,
-        memory: Math.round(os.totalmem() / 1024 / 1024 / 1024) + 'GB'
-    };
-
-    // Extract relevant request headers
-    const requestInfo = data.headers ? {
-        'Request Headers': {
-            'x-forwarded-host': data.headers['x-forwarded-host'],
-            'x-vercel-ip-timezone': data.headers['x-vercel-ip-timezone'],
-            'referer': data.headers.referer,
-            'x-vercel-ip-as-number': data.headers['x-vercel-ip-as-number'],
-            'sec-fetch-mode': data.headers['sec-fetch-mode'],
-            'x-vercel-proxied-for': data.headers['x-vercel-proxied-for'],
-            'x-real-ip': data.headers['x-real-ip'],
-            'x-vercel-ip-postal-code': data.headers['x-vercel-ip-postal-code'],
-            'host': data.headers.host,
-            'sec-fetch-dest': data.headers['sec-fetch-dest'],
-            'sec-fetch-site': data.headers['sec-fetch-site'],
-            'x-forwarded-for': data.headers['x-forwarded-for'],
-            'origin': data.headers.origin,
-            'sec-ch-ua': data.headers['sec-ch-ua'],
-            'user-agent': data.headers['user-agent'],
-            'sec-ch-ua-platform': data.headers['sec-ch-ua-platform'],
-            'x-vercel-ip-longitude': data.headers['x-vercel-ip-longitude'],
-            'accept': data.headers.accept,
-            'x-vercel-forwarded-for': data.headers['x-vercel-forwarded-for'],
-            'x-vercel-ip-latitude': data.headers['x-vercel-ip-latitude'],
-            'x-forwarded-proto': data.headers['x-forwarded-proto'],
-            'x-vercel-ip-country-region': data.headers['x-vercel-ip-country-region'],
-            'x-vercel-deployment-url': data.headers['x-vercel-deployment-url'],
-            'accept-encoding': data.headers['accept-encoding'],
-            'x-vercel-id': data.headers['x-vercel-id'],
-            'accept-language': data.headers['accept-language'],
-            'x-vercel-ip-city': decodeURIComponent(data.headers['x-vercel-ip-city'] || ''),
-            'x-vercel-ip-country': data.headers['x-vercel-ip-country']
-        }
-    } : null;
-
-    const logEntry = {
-        service: 'suggest-people',
-        logVersion: '4.3.6',
-        timestamp: new Date().toISOString(),
-        event: {
-            level,
-            action: message,
-            query: data.query || null,
-            response: data.status ? {
-                status: data.status,
-                processingTime: data.processingTime,
-                contentPreview: data.responseContent ? 
-                    data.responseContent.substring(0, 500) + '...' : null,
-                cacheHit: data.cacheHit
-            } : null,
-            error: data.error || null
-        },
-        client: {
-            origin: data.headers?.origin || null,
-            userAgent: data.headers?.['user-agent'] || null
-        },
-        server: serverInfo,
-        request: requestInfo
-    };
-    
-    console.log(JSON.stringify(logEntry));
-}
 
 /**
  * Cleans a title string by removing HTML tags and taking only the first part before any pipe character
@@ -142,131 +65,171 @@ function cleanTitle(title = '') {
  * @param {Array} formattedResults - The formatted results
  * @param {boolean} cacheHit - Whether response was served from cache
  * @param {boolean} cacheResult - Whether caching was successful
+ * @param {string} requestId - Request ID for tracking
  * @returns {Promise<Object>} The result of the analytics recording
  */
-async function recordQueryAnalytics(req, locationData, startTime, formattedResults, cacheHit, cacheResult) {
+async function recordQueryAnalytics(req, locationData, startTime, formattedResults, cacheHit, cacheResult, requestId) {
     try {
-        console.log('MongoDB URI defined:', !!process.env.MONGODB_URI);
-        
-        if (process.env.MONGODB_URI) {
-            // Extract and sanitize session ID
-            const sessionId = sanitizeSessionId(req.query.sessionId || req.headers['x-session-id']);
-            console.log('Session ID sources:', {
-                fromQueryParam: req.query.sessionId,
-                fromHeader: req.headers['x-session-id'],
-                fromBody: req.body?.sessionId,
-                afterSanitization: sessionId
+        if (!process.env.MONGODB_URI) {
+            commonUtils.logEvent('info', 'analytics_skipped', 'suggest-people', {
+                requestId,
+                reason: 'mongodb_uri_not_configured'
+            });
+            return null;
+        }
+
+        // Create base analytics data from request
+        const baseData = createRequestAnalytics(req, locationData, 'suggestPeople', startTime);
+
+        // Add people-specific data
+        const analyticsData = {
+            ...baseData,
+            resultCount: formattedResults ? formattedResults.length : 0,
+            hasResults: formattedResults && formattedResults.length > 0,
+            cacheHit,
+            cacheSet: cacheResult,
+            isStaffTab: true,
+            tabs: ['Faculty & Staff'],
+            enrichmentData: {
+                resultCount: formattedResults ? formattedResults.length : 0,
+                staffData: formattedResults ? formattedResults.slice(0, 3).map(staff => ({
+                    title: staff.title || '',
+                    position: staff.position || staff.affiliation || '',
+                    department: staff.department || staff.college || '',
+                    url: staff.url || ''
+                })) : [],
+                cacheHit: cacheHit || false,
+                cacheSet: cacheResult || false,
+            }
+        };
+
+        // Standardize and validate data
+        const standardData = createStandardAnalyticsData(analyticsData);
+
+        // Log analytics data (excluding sensitive information)
+        logAnalyticsData(standardData, 'suggest-people');
+
+        // Record in database
+        try {
+            const recordResult = await recordQuery(standardData);
+
+            commonUtils.logEvent('info', 'analytics_recorded', 'suggest-people', {
+                requestId,
+                recordId: recordResult?._id?.toString(),
+                success: !!recordResult
             });
 
-            const processingTime = Date.now() - startTime;
-            const resultCount = formattedResults.length;
-            
-            // Create raw analytics data
-            const rawData = {
-                handler: 'suggestPeople',
-                query: req.query.query || '[empty query]',
-                searchCollection: 'seattleu~sp-search',
-                userAgent: req.headers['user-agent'],
-                referer: req.headers.referer,
-                city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-                region: locationData.region || req.headers['x-vercel-ip-country-region'],
-                country: locationData.country || req.headers['x-vercel-ip-country'],
-                timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
-                responseTime: processingTime,
-                resultCount: resultCount,
-                hasResults: resultCount > 0,
-                cacheHit: cacheHit,
-                cacheSet: cacheResult,
-                isStaffTab: true,
-                tabs: ['Faculty & Staff'],
-                sessionId: sessionId,
-                enrichmentData: {
-                    resultCount: formattedResults ? formattedResults.length : 0,
-                    staffData: formattedResults ? formattedResults.slice(0, 3).map(staff => ({
-                        title: staff.title || '',
-                        position: staff.position || staff.affiliation || '',
-                        department: staff.department || staff.college || '',
-                        url: staff.url || ''
-                    })) : [],
-                    cacheHit: cacheHit || false,
-                    cacheSet: cacheResult || false,
-                },
-                timestamp: new Date()
-            };
-                        
-            // Log the enrichment data explicitly
-            console.log('Enrichment data for MongoDB:', JSON.stringify(rawData.enrichmentData));
-            
-            // Standardize data to ensure consistent schema
-            const analyticsData = createStandardAnalyticsData(rawData);
-            
-            // Log data (excluding sensitive information)
-            logAnalyticsData(analyticsData, 'suggestPeople recording');
-            
-            // Record the analytics
-            try {
-                const recordResult = await recordQuery(analyticsData);
-                console.log('Analytics record result:', recordResult ? 'Saved' : 'Not saved');
-                if (recordResult && recordResult._id) {
-                    console.log('Analytics record ID:', recordResult._id.toString());
-                }
-                return recordResult;
-            } catch (recordError) {
-                console.error('Error recording analytics:', recordError.message);
-                if (recordError.name === 'ValidationError') {
-                    console.error('Validation errors:', Object.keys(recordError.errors).join(', '));
-                }
-                return null;
-            }
-        } else {
-            console.log('No MongoDB URI defined, skipping analytics recording');
+            return recordResult;
+        } catch (recordError) {
+            commonUtils.logEvent('error', 'analytics_record_failed', 'suggest-people', {
+                requestId,
+                error: recordError.message,
+                query: req.query.query
+            });
             return null;
         }
     } catch (analyticsError) {
-        console.error('Analytics error:', analyticsError);
+        commonUtils.logEvent('error', 'analytics_processing_failed', 'suggest-people', {
+            requestId,
+            error: analyticsError.message,
+            stack: analyticsError.stack
+        });
         return null;
     }
 }
 
 /**
  * Handler for people/faculty/staff suggestion requests to Funnelback
- * Now includes Redis caching for improved performance
+ * Enhanced with consistent IP tracking, session management, and error handling
  * 
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
 async function handler(req, res) {
     const startTime = Date.now();
-    const requestId = req.headers['x-vercel-id'] || Date.now().toString();
-    const userIp = req.headers['x-original-client-ip'] || 
-        (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
-        (req.headers['x-real-ip']) || 
-        req.socket.remoteAddress;
+    const requestId = commonUtils.getRequestId(req);
+    const clientIp = commonUtils.extractClientIp(req);
 
-    console.log(`[RequestID: ${requestId}] Processing request for ${userIp}`);
+    // Log request received with detailed IP information for debugging
+    commonUtils.logFullIpInfo(req, 'suggest-people', requestId);
 
+    // Standard log with redacted IP (for security/privacy)
+    commonUtils.logEvent('info', 'request_received', 'suggest-people', {
+        requestId,
+        path: req.path,
+        query: req.query.query,
+        clientIp // Will be redacted in standard logs
+    });
 
-    // CORS handling for Seattle University domain
-    res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    // Extract session information
+    const sessionInfo = commonUtils.extractSessionInfo(req);
+    commonUtils.logSessionHandling(req, sessionInfo, 'suggest-people', requestId);
 
+    // Set CORS headers
+    commonUtils.setCorsHeaders(res);
+
+    // Handle OPTIONS requests
     if (req.method === 'OPTIONS') {
+        commonUtils.logEvent('info', 'options_request', 'suggest-people', { requestId });
         res.status(200).end();
         return;
     }
 
+    // Check caching capability
+    let cachingEnabled = false;
+    try {
+        cachingEnabled = await isCachingEnabled();
+    } catch (cacheError) {
+        commonUtils.logEvent('warn', 'cache_check_failed', 'suggest-people', {
+            requestId,
+            error: cacheError.message
+        });
+    }
+
     // Only use caching for queries with 3 or more characters
-    const canUseCache = isCachingEnabled() && 
-                     req.query.query && 
-                     req.query.query.length >= 3;
-    
+    const canUseCache = cachingEnabled &&
+        req.query.query &&
+        req.query.query.length >= 3;
+
+    // Log cache parameters
+    commonUtils.logEvent('debug', 'cache_parameters', 'suggest-people', {
+        requestId,
+        cachingEnabled,
+        queryExists: !!req.query.query,
+        queryLength: req.query.query?.length || 0,
+        canUseCache
+    });
+
     let cacheHit = false;
     let cacheResult = null;
     let formattedResults = null;
-    const locationData = await getLocationData(userIp);
-    console.log('GeoIP location data:', locationData);
-    
+
+    // Get location data as early as possible
+    let locationData = null;
+    try {
+        locationData = await getLocationData(clientIp);
+        commonUtils.logEvent('debug', 'location_data_retrieved', 'suggest-people', {
+            requestId,
+            location: {
+                city: locationData.city,
+                region: locationData.region,
+                country: locationData.country
+            }
+        });
+    } catch (geoError) {
+        commonUtils.logEvent('warn', 'location_data_failed', 'suggest-people', {
+            requestId,
+            error: geoError.message
+        });
+        // Use default empty location data
+        locationData = {
+            city: null,
+            region: null,
+            country: null,
+            timezone: null
+        };
+    }
+
     // Try to get data from cache first
     if (canUseCache) {
         try {
@@ -274,43 +237,53 @@ async function handler(req, res) {
             if (cachedData) {
                 cacheHit = true;
                 formattedResults = cachedData;
-                
+
                 // Calculate processing time
                 const processingTime = Date.now() - startTime;
-                
+
                 // Log cache hit with standard event logging
-                logEvent('info', 'Cache hit for people suggestions', {
+                commonUtils.logEvent('info', 'cache_hit', 'suggest-people', {
+                    requestId,
                     status: 200,
                     processingTime: `${processingTime}ms`,
-                    query: req.query,
-                    headers: req.headers,
-                    cacheHit: true,
-                    requestId: requestId
+                    resultCount: formattedResults.length || 0,
+                    query: req.query.query
                 });
-                
+
                 // Send cached response
                 res.setHeader('Content-Type', 'application/json');
+                res.setHeader('X-Request-ID', requestId);
                 res.send(formattedResults);
-                
-                // Get location data and record analytics (in background)
-                recordQueryAnalytics(req, locationData, startTime, formattedResults, true, null);
+
+                // Record analytics in background
+                recordQueryAnalytics(
+                    req,
+                    locationData,
+                    startTime,
+                    formattedResults,
+                    true,
+                    null,
+                    requestId
+                );
+
                 return; // Exit early since response already sent
+            } else {
+                commonUtils.logEvent('debug', 'cache_miss', 'suggest-people', {
+                    requestId,
+                    query: req.query.query
+                });
             }
         } catch (cacheError) {
-            // Log cache error but continue with normal flow
-            console.error('Cache error in people handler:', cacheError);
+            commonUtils.logEvent('error', 'cache_error', 'suggest-people', {
+                requestId,
+                error: cacheError.message
+            });
         }
     }
 
     try {
         const funnelbackUrl = 'https://dxp-us-search.funnelback.squiz.cloud/s/search.json';
 
-        console.log('DEBUG - About to make Funnelback API request with params:', {
-            url: funnelbackUrl,
-            query: req.query,
-            userIp
-        });
-        
         // Keep params for logging
         const params = new URLSearchParams();
         params.append('form', 'partial');
@@ -332,61 +305,34 @@ async function handler(req, res) {
 
         const url = `${funnelbackUrl}?${queryString}`;
 
-        // Log the exact URL for debugging
-        console.log('DEBUG - Exact Funnelback URL:', url);
-
-        // Log request details
-        logEvent('debug', 'Outgoing request details', {
-            service: 'suggest-people',
-            url: url,
-            query: Object.fromEntries(params),
-            headers: req.headers,
-            requestId: requestId
-        });
-
-        console.log('DEBUG - Making request to Funnelback with URL:', url);
-
+        // Create outgoing headers with location data
         const funnelbackHeaders = {
             'Accept': 'text/html',
-            'X-Forwarded-For': userIp,
-            'X-Geo-City': locationData.city,
-            'X-Geo-Region': locationData.region,
-            'X-Geo-Country': locationData.country,
-            'X-Geo-Timezone': locationData.timezone
+            'X-Forwarded-For': clientIp,
+            'X-Geo-City': locationData.city || '',
+            'X-Geo-Region': locationData.region || '',
+            'X-Geo-Country': locationData.country || '',
+            'X-Geo-Timezone': locationData.timezone || '',
+            'X-Request-ID': requestId
         };
-        console.log('- Outgoing Headers to Funnelback:', funnelbackHeaders);
 
+        // Log outgoing request
+        commonUtils.logEvent('info', 'outgoing_request', 'suggest-people', {
+            requestId,
+            url: url,
+            query: req.query.query || ''
+        });
+
+        // Make request to Funnelback
         const response = await axios.get(url, {
             headers: funnelbackHeaders
         });
 
-        console.log('DEBUG - Response status:', response.status);
-        console.log('DEBUG - Response data type:', response.data?.response?.resultPacket?.results ? 'Has results' : 'No results');
-        console.log('DEBUG - Number of results:', response.data?.response?.resultPacket?.results?.length || 0);
-
-        console.log('DEBUG - Funnelback API response status:', response.status);
-        console.log('DEBUG - Funnelback API response data type:', typeof response.data);
-        console.log('DEBUG - Funnelback API response structure:', {
-            hasResponse: !!response.data?.response,
-            hasResultPacket: !!response.data?.response?.resultPacket,
-            hasResults: !!response.data?.response?.resultPacket?.results,
-            resultCount: response.data?.response?.resultPacket?.results?.length || 0
-        });
-
-        // Get result count for analytics
-        const resultCount = response.data?.response?.resultPacket?.results?.length || 0;
-        const processingTime = Date.now() - startTime;
-
-        // Log the successful response
-        logEvent('info', 'Response received', {
-            service: 'suggest-people',
-            query: Object.fromEntries(params),
+        // Log successful response
+        commonUtils.logEvent('info', 'funnelback_response', 'suggest-people', {
+            requestId,
             status: response.status,
-            processingTime: `${processingTime}ms`,
-            responseContent: JSON.stringify(response.data).substring(0, 500) + '...',
-            headers: req.headers,
-            cacheHit: false,
-            requestId: requestId
+            resultCount: response.data?.response?.resultPacket?.results?.length || 0
         });
 
         // Format and prepare response
@@ -408,64 +354,80 @@ async function handler(req, res) {
             };
         });
 
+        // Check if we should cache the results
         if (canUseCache && formattedResults && formattedResults.length > 0) {
-            console.log(`DEBUG - Storing people results in cache, count: ${formattedResults.length}`);
-            
             try {
-                // Log the exact parameters to help with debugging
-                console.log(`DEBUG - People cache key parameters:`, {
-                    endpoint: 'people',
-                    query: req.query.query,
-                    collection: 'seattleu~sp-search',
-                    staffTab: true,
-                    requestId: requestId
-                });
-                
                 cacheResult = await setCachedData('people', req.query, formattedResults, requestId);
-                console.log(`DEBUG - People cache set result: ${cacheResult}`);
+
+                commonUtils.logEvent('debug', 'cache_set_result', 'suggest-people', {
+                    requestId,
+                    success: cacheResult,
+                    itemCount: formattedResults.length
+                });
             } catch (cacheSetError) {
-                console.error('DEBUG - Error setting people cache:', cacheSetError);
+                commonUtils.logEvent('error', 'cache_set_error', 'suggest-people', {
+                    requestId,
+                    error: cacheSetError.message
+                });
                 cacheResult = false;
             }
+        } else {
+            commonUtils.logEvent('debug', 'cache_skipped', 'suggest-people', {
+                requestId,
+                canUseCache,
+                resultCount: formattedResults?.length || 0
+            });
         }
 
-        // Send response
+        // Process time for this request
+        const processingTime = Date.now() - startTime;
+
+        // Log complete response
+        commonUtils.logEvent('info', 'request_completed', 'suggest-people', {
+            requestId,
+            status: response.status,
+            processingTime: `${processingTime}ms`,
+            resultCount: formattedResults.length || 0,
+            query: req.query.query,
+            cacheHit: false
+        });
+
+        // Send response to client with request ID
         res.setHeader('Content-Type', 'application/json');
+        res.setHeader('X-Request-ID', requestId);
         res.send(formattedResults);
-        
-        // Record analytics (in background)
-        recordQueryAnalytics(req, locationData, startTime, formattedResults, false, cacheResult);
 
+        // Record analytics in background
+        recordQueryAnalytics(
+            req,
+            locationData,
+            startTime,
+            formattedResults,
+            false,
+            cacheResult,
+            requestId
+        );
     } catch (error) {
-        // Log detailed error information
-        logEvent('error', 'Handler error', {
-            service: 'suggest-people',
-            query: req.query,
-            error: {
-                message: error.message,
-                stack: error.stack,
-                response: error.response?.data,
-                status: error.response?.status
-            },
+        // Handle errors comprehensively
+        const errorInfo = commonUtils.formatError(error, 'suggest-people', 'people_suggestion_request_failed', requestId);
+
+        // Log additional context for debugging
+        commonUtils.logEvent('error', 'request_failed', 'suggest-people', {
+            requestId,
+            query: req.query.query,
             status: error.response?.status || 500,
-            processingTime: `${Date.now() - startTime}ms`,
-            headers: req.headers
+            errorDetails: {
+                message: error.message,
+                responseStatus: error.response?.status,
+                axiosError: error.isAxiosError
+            }
         });
 
-        console.error('DEBUG - Funnelback API request error details:', {
+        // Send error response
+        res.status(errorInfo.status).json({
+            error: 'People search error',
             message: error.message,
-            stack: error.stack,
-            name: error.name,
-            isAxiosError: error.isAxiosError,
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            responseData: error.response?.data ? JSON.stringify(error.response.data).substring(0, 500) : null
-        });
-        
-        res.status(error.response?.status || 500).json({
-            error: 'Error fetching results',
-            message: error.message,
-            details: error.response?.data
+            requestId: requestId
         });
     }
 }

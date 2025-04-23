@@ -29,14 +29,14 @@ const axios = require('axios');
 const { getLocationData } = require('../lib/geoIpService');
 const { recordQuery } = require('../lib/queryAnalytics');
 const commonUtils = require('../lib/commonUtils');
-const { 
-    createStandardAnalyticsData, 
+const {
+    createStandardAnalyticsData,
     createRequestAnalytics,
-    logAnalyticsData 
+    logAnalyticsData
 } = require('../lib/schemaHandler');
-const { 
-    getCachedData, 
-    setCachedData, 
+const {
+    getCachedData,
+    setCachedData,
     isCachingEnabled,
     logCacheCheck,
     logCacheHit,
@@ -61,11 +61,11 @@ function enrichSuggestions(suggestions, query, requestId) {
         });
         return [];
     }
-    
+
     // Extract tab information
     const isProgramTab = Boolean(query['f.Tabs|programMain']);
     const isStaffTab = Boolean(query['f.Tabs|seattleu~ds-staff']);
-    
+
     // Log enrichment process
     commonUtils.logEvent('debug', 'enriching_suggestions', 'suggest-handler', {
         requestId,
@@ -78,7 +78,7 @@ function enrichSuggestions(suggestions, query, requestId) {
         let metadata = {
             tabs: []
         };
-        
+
         // Add tab information based on the source of the request
         if (isProgramTab) {
             metadata.tabs.push('program-main');
@@ -123,10 +123,10 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
             });
             return null;
         }
-        
+
         // Create base analytics data from request
         const baseData = createRequestAnalytics(req, locationData, 'suggest', startTime);
-        
+
         // Add suggestion-specific data
         const analyticsData = {
             ...baseData,
@@ -144,23 +144,23 @@ async function recordQueryAnalytics(req, locationData, startTime, enrichedRespon
                 cacheSet: cacheResult || false
             }
         };
-        
+
         // Standardize and validate data
         const standardData = createStandardAnalyticsData(analyticsData);
-        
+
         // Log analytics data (excluding sensitive information)
         logAnalyticsData(standardData, 'suggest-handler');
-        
+
         // Record in database
         try {
             const recordResult = await recordQuery(standardData);
-            
+
             commonUtils.logEvent('info', 'analytics_recorded', 'suggest-handler', {
                 requestId,
                 recordId: recordResult?._id?.toString(),
                 success: !!recordResult
             });
-            
+
             return recordResult;
         } catch (recordError) {
             commonUtils.logEvent('error', 'analytics_record_failed', 'suggest-handler', {
@@ -192,10 +192,10 @@ async function handler(req, res) {
     const startTime = Date.now();
     const requestId = commonUtils.getRequestId(req);
     const clientIp = commonUtils.extractClientIp(req);
-    
+
     // Log full IP information for debugging
     commonUtils.logFullIpInfo(req, 'suggest-handler', requestId);
-    
+
     // Standard log with redacted IP (for security/privacy)
     commonUtils.logEvent('info', 'request_received', 'suggest-handler', {
         requestId,
@@ -203,10 +203,10 @@ async function handler(req, res) {
         query: req.query.query || req.query.partial_query,
         clientIp: 'REDACTED' // Redacted for privacy in logs
     });
-    
+
     // Log detailed IP information for debugging
     commonUtils.logIpDetection(req, clientIp, 'suggest-handler', requestId);
-    
+
     // Set CORS headers
     commonUtils.setCorsHeaders(res);
 
@@ -220,7 +220,7 @@ async function handler(req, res) {
     // Extract session information
     const sessionInfo = commonUtils.extractSessionInfo(req);
     commonUtils.logSessionHandling(req, sessionInfo, 'suggest-handler', requestId);
-    
+
     // Check caching capability
     let cachingEnabled = false;
     try {
@@ -231,11 +231,11 @@ async function handler(req, res) {
             error: cacheError.message
         });
     }
-    
+
     // Only use caching for queries with 3 or more characters
-    const canUseCache = cachingEnabled && 
-                      (req.query.query || req.query.partial_query) && 
-                      (req.query.query?.length >= 3 || req.query.partial_query?.length >= 3);
+    const canUseCache = cachingEnabled &&
+        (req.query.query || req.query.partial_query) &&
+        (req.query.query?.length >= 3 || req.query.partial_query?.length >= 3);
 
     // Log cache parameters
     commonUtils.logEvent('debug', 'cache_parameters', 'suggest-handler', {
@@ -251,7 +251,7 @@ async function handler(req, res) {
     let cacheHit = false;
     let enrichedResponse = null;
     let cacheResult = null;
-    
+
     // Get location data as early as possible
     let locationData = null;
     try {
@@ -277,19 +277,19 @@ async function handler(req, res) {
             timezone: null
         };
     }
-    
+
     // Try to get data from cache first
     if (canUseCache) {
         try {
             const cachedData = await getCachedData('suggestions', req.query, requestId);
-            
+
             if (cachedData) {
                 cacheHit = true;
                 enrichedResponse = cachedData;
-                
+
                 // Calculate processing time
                 const processingTime = Date.now() - startTime;
-                
+
                 // Log cache hit with standard event logging
                 commonUtils.logEvent('info', 'cache_hit', 'suggest-handler', {
                     requestId,
@@ -298,23 +298,23 @@ async function handler(req, res) {
                     suggestionsCount: enrichedResponse.length || 0,
                     query: req.query.query || req.query.partial_query
                 });
-                
+
                 // Send cached response
                 res.setHeader('Content-Type', 'application/json');
                 res.setHeader('X-Request-ID', requestId);
                 res.json(enrichedResponse);
-                
+
                 // Record analytics in background
                 recordQueryAnalytics(
-                    req, 
-                    locationData, 
-                    startTime, 
-                    enrichedResponse, 
-                    true, 
-                    null, 
+                    req,
+                    locationData,
+                    startTime,
+                    enrichedResponse,
+                    true,
+                    null,
                     requestId
                 );
-                
+
                 return; // Exit early since response already sent
             } else {
                 commonUtils.logEvent('debug', 'cache_miss', 'suggest-handler', {
@@ -374,7 +374,7 @@ async function handler(req, res) {
         if (willUseCache && enrichedResponse && enrichedResponse.length > 0) {
             try {
                 cacheResult = await setCachedData('suggestions', req.query, enrichedResponse, requestId);
-                
+
                 commonUtils.logEvent('debug', 'cache_set_result', 'suggest-handler', {
                     requestId,
                     success: cacheResult,
@@ -412,21 +412,21 @@ async function handler(req, res) {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('X-Request-ID', requestId);
         res.json(enrichedResponse);
-        
+
         // Record analytics in background
         recordQueryAnalytics(
-            req, 
-            locationData, 
-            startTime, 
-            enrichedResponse, 
-            false, 
-            cacheResult, 
+            req,
+            locationData,
+            startTime,
+            enrichedResponse,
+            false,
+            cacheResult,
             requestId
         );
     } catch (error) {
         // Handle errors comprehensively
         const errorInfo = commonUtils.formatError(error, 'suggest-handler', 'suggestion_request_failed', requestId);
-        
+
         // Log additional context for debugging
         commonUtils.logEvent('error', 'request_failed', 'suggest-handler', {
             requestId,
@@ -438,7 +438,7 @@ async function handler(req, res) {
                 axiosError: error.isAxiosError
             }
         });
-        
+
         // Send error response
         res.status(errorInfo.status).json({
             error: 'Suggestion error',
