@@ -2,31 +2,33 @@
  * @fileoverview Dedicated Search Results Proxy Server - Enhanced with Analytics
  * 
  * Handles specific search result requests for the Funnelback integration.
- * Enhanced with session tracking and improved analytics integration.
+ * Enhanced with consistent IP tracking, session management, and improved analytics.
  * 
  * Features:
- * - CORS handling
+ * - CORS handling with standardized headers
  * - Search-specific parameter management
- * - Detailed logging of search requests
- * - Enhanced analytics with session tracking
+ * - Detailed logging using common utilities
+ * - Enhanced analytics with consistent schema
  * - Click-through attribution
- * - Consistent schema handling
+ * - Session tracking with consistent ID management
  * - GeoIP-based location tracking
+ * - Consistent IP extraction across all request types
  * 
  * @author Victor Chimenti
  * @namespace searchHandler
- * @version 4.1.3
+ * @version 5.0.0
  * @license MIT
- * @lastModified 2025-04-22
+ * @lastModified 2025-04-23
  */
 
 const axios = require('axios');
-const geoIpService = require('../lib/geoIpService');
+const { getLocationData } = require('../lib/geoIpService');
 const { recordQuery } = require('../lib/queryAnalytics');
-const { 
-    createStandardAnalyticsData, 
-    sanitizeSessionId, 
-    logAnalyticsData 
+const commonUtils = require('../lib/commonUtils');
+const {
+    createStandardAnalyticsData,
+    createRequestAnalytics,
+    logAnalyticsData
 } = require('../lib/schemaHandler');
 
 /**
@@ -49,21 +51,6 @@ function extractResultCount(htmlContent) {
 }
 
 /**
- * Extracts client IP from request using consistent priority order
- * 
- * @param {Object} req - Express request object
- * @returns {string} Best available client IP
- */
-function extractClientIp(req) {
-    return req.headers['x-original-client-ip'] || 
-           req.headers['x-real-ip'] || 
-           (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 
-           req.headers['x-vercel-proxied-for'] || 
-           req.socket.remoteAddress || 
-           'unknown';
-}
-
-/**
  * Handler for dedicated search requests.
  * 
  * @param {Object} req - Express request object
@@ -75,43 +62,30 @@ function extractClientIp(req) {
  */
 async function handler(req, res) {
     const startTime = Date.now();
-    const requestId = req.headers['x-request-id'] || `req_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-    
-    // Get client IP using consistent extraction function
-    const userIp = extractClientIp(req);
+    const requestId = commonUtils.getRequestId(req);
+    const clientIp = commonUtils.extractClientIp(req);
 
-    console.log(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        service: 'search-handler',
+    // Log full IP information for debugging
+    commonUtils.logFullIpInfo(req, 'search-handler', requestId);
+
+    // Standard log with redacted IP (for security/privacy)
+    commonUtils.logEvent('info', 'request_received', 'search-handler', {
         requestId,
-        event: 'request_received',
         path: req.path,
         query: req.query.query || null,
-        userIp
-    }));
+        clientIp // Will be redacted in standard logs
+    });
 
-    // Log IP Headers for debugging
-    console.log(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        service: 'search-handler',
-        requestId,
-        event: 'ip_headers',
-        headers: {
-            originalClientIp: req.headers['x-original-client-ip'],
-            forwardedFor: req.headers['x-forwarded-for'],
-            realIp: req.headers['x-real-ip'],
-            socketRemote: req.socket.remoteAddress,
-            vercelIpCity: req.headers['x-vercel-ip-city'],
-            finalUserIp: userIp
-        }
-    }));
-    
+    // Extract session information
+    const sessionInfo = commonUtils.extractSessionInfo(req);
+    commonUtils.logSessionHandling(req, sessionInfo, 'search-handler', requestId);
+
     // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', 'https://www.seattleu.edu');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    commonUtils.setCorsHeaders(res);
 
+    // Handle OPTIONS requests
     if (req.method === 'OPTIONS') {
+        commonUtils.logEvent('info', 'options_request', 'search-handler', { requestId });
         res.status(200).end();
         return;
     }
@@ -122,28 +96,21 @@ async function handler(req, res) {
         // Get location data based on the user's IP
         let locationData = null;
         try {
-            locationData = await geoIpService.getLocationData(userIp, requestId);
-            console.log(JSON.stringify({
-                timestamp: new Date().toISOString(),
-                service: 'search-handler',
+            locationData = await getLocationData(clientIp);
+            commonUtils.logEvent('debug', 'location_data_retrieved', 'search-handler', {
                 requestId,
-                event: 'geo_lookup_success',
                 location: {
                     city: locationData.city,
                     region: locationData.region,
                     country: locationData.country
                 }
-            }));
+            });
         } catch (geoError) {
-            console.error('Error getting location data:', geoError);
-            console.log(JSON.stringify({
-                timestamp: new Date().toISOString(),
-                service: 'search-handler',
+            commonUtils.logEvent('warn', 'location_data_failed', 'search-handler', {
                 requestId,
-                event: 'geo_lookup_error',
                 error: geoError.message
-            }));
-            // Set default location data
+            });
+            // Set default empty location data
             locationData = {
                 city: null,
                 region: null,
@@ -152,9 +119,10 @@ async function handler(req, res) {
             };
         }
 
+        // Create outgoing headers with location data
         const funnelbackHeaders = {
             'Accept': 'text/html',
-            'X-Forwarded-For': userIp,
+            'X-Forwarded-For': clientIp,
             'X-Geo-City': locationData.city || '',
             'X-Geo-Region': locationData.region || '',
             'X-Geo-Country': locationData.country || '',
@@ -162,141 +130,120 @@ async function handler(req, res) {
             'X-Request-ID': requestId
         };
 
-        console.log(JSON.stringify({
-            timestamp: new Date().toISOString(),
-            service: 'search-handler',
+        // Log detailed headers for debugging
+        console.log(`- Outgoing Headers to Funnelback:`, {
+            funnelbackHeaders
+        });
+
+        // Log outgoing request
+        commonUtils.logEvent('info', 'outgoing_request', 'search-handler', {
             requestId,
-            event: 'outgoing_request',
             url: funnelbackUrl,
-            headers: funnelbackHeaders,
-            params: req.query
-        }));
+            query: req.query.query || ''
+        });
 
         const response = await axios.get(funnelbackUrl, {
             params: req.query,
             headers: funnelbackHeaders
         });
 
-        console.log(JSON.stringify({
-            timestamp: new Date().toISOString(),
-            service: 'search-handler',
+        // Log successful response
+        commonUtils.logEvent('info', 'funnelback_response', 'search-handler', {
             requestId,
-            event: 'response_received',
             status: response.status,
             contentLength: response.data?.length || 0
-        }));
-        
+        });
+
         // Extract the result count from the HTML response
         const resultCount = extractResultCount(response.data);
         const processingTime = Date.now() - startTime;
-        
+
         // Record analytics data
         try {
-            console.log(JSON.stringify({
-                timestamp: new Date().toISOString(),
-                service: 'search-handler',
+            commonUtils.logEvent('info', 'recording_analytics', 'search-handler', {
                 requestId,
-                event: 'recording_analytics',
                 query: req.query.query,
                 resultCount
-            }));
-            
+            });
+
             if (process.env.MONGODB_URI) {
-                // Extract and sanitize session ID
-                const sessionId = sanitizeSessionId(req.query.sessionId || req.headers['x-session-id']);
-                
-                // Create raw analytics data
-                const rawData = {
-                    handler: 'search',
-                    query: req.query.query || req.query.partial_query || '[empty query]',
-                    searchCollection: req.query.collection || 'seattleu~sp-search',
-                    userAgent: req.headers['user-agent'],
-                    referer: req.headers.referer,
-                    city: locationData.city || decodeURIComponent(req.headers['x-vercel-ip-city'] || ''),
-                    region: locationData.region || req.headers['x-vercel-ip-country-region'],
-                    country: locationData.country || req.headers['x-vercel-ip-country'],
-                    timezone: locationData.timezone || req.headers['x-vercel-ip-timezone'],
-                    responseTime: processingTime,
+                // Create base analytics data from request
+                const baseData = createRequestAnalytics(req, locationData, 'search', startTime);
+
+                // Add search-specific data
+                const analyticsData = {
+                    ...baseData,
                     resultCount: resultCount,
                     hasResults: resultCount > 0,
-                    isProgramTab: Boolean(req.query['f.Tabs|programMain']),
-                    isStaffTab: Boolean(req.query['f.Tabs|seattleu~ds-staff']),
-                    tabs: [],
-                    sessionId: sessionId,
-                    timestamp: new Date(),
-                    clickedResults: [],
-                    requestId
+                    enrichmentData: {
+                        searchParams: req.query,
+                        resultCount: resultCount,
+                        responseTime: processingTime
+                    }
                 };
-                
-                // Add tabs information
-                if (rawData.isProgramTab) rawData.tabs.push('program-main');
-                if (rawData.isStaffTab) rawData.tabs.push('Faculty & Staff');
-                
-                // Standardize data to ensure consistent schema
-                const analyticsData = createStandardAnalyticsData(rawData);
-                
-                // Log data (excluding sensitive information)
-                logAnalyticsData(analyticsData, 'search recording');
-                
+
+                // Standardize and validate data
+                const standardData = createStandardAnalyticsData(analyticsData);
+
+                // Log analytics data (excluding sensitive information)
+                logAnalyticsData(standardData, 'search-handler');
+
                 // Record the analytics
                 try {
-                    const recordResult = await recordQuery(analyticsData);
-                    console.log(JSON.stringify({
-                        timestamp: new Date().toISOString(),
-                        service: 'search-handler',
+                    const recordResult = await recordQuery(standardData);
+                    commonUtils.logEvent('info', 'analytics_recorded', 'search-handler', {
                         requestId,
-                        event: 'analytics_recorded',
                         success: !!recordResult,
                         recordId: recordResult?._id?.toString()
-                    }));
+                    });
                 } catch (recordError) {
-                    console.error('Error recording analytics:', recordError);
-                    console.log(JSON.stringify({
-                        timestamp: new Date().toISOString(),
-                        service: 'search-handler',
+                    commonUtils.logEvent('error', 'analytics_record_error', 'search-handler', {
                         requestId,
-                        event: 'analytics_record_error',
                         error: recordError.message
-                    }));
+                    });
                 }
             } else {
-                console.log(JSON.stringify({
-                    timestamp: new Date().toISOString(),
-                    service: 'search-handler',
+                commonUtils.logEvent('info', 'analytics_skipped', 'search-handler', {
                     requestId,
-                    event: 'analytics_skipped',
                     reason: 'mongodb_uri_not_defined'
-                }));
+                });
             }
         } catch (analyticsError) {
-            console.error('Analytics error:', analyticsError);
-            console.log(JSON.stringify({
-                timestamp: new Date().toISOString(),
-                service: 'search-handler',
+            commonUtils.logEvent('error', 'analytics_error', 'search-handler', {
                 requestId,
-                event: 'analytics_error',
                 error: analyticsError.message
-            }));
+            });
         }
-        
+
+        // Log complete response
+        commonUtils.logEvent('info', 'request_completed', 'search-handler', {
+            requestId,
+            status: response.status,
+            processingTime: `${processingTime}ms`,
+            resultCount: resultCount
+        });
+
+        // Send response to client with request ID
+        res.setHeader('X-Request-ID', requestId);
         res.send(response.data);
     } catch (error) {
-        console.error('Error in search handler:', {
-            message: error.message,
-            status: error.response?.status,
-            data: error.response?.data
-        });
-        
-        console.log(JSON.stringify({
-            timestamp: new Date().toISOString(),
-            service: 'search-handler',
+        // Handle errors using common utils
+        const errorInfo = commonUtils.formatError(error, 'search-handler', 'search_request_failed', requestId);
+
+        // Log additional context for debugging
+        commonUtils.logEvent('error', 'request_failed', 'search-handler', {
             requestId,
-            event: 'handler_error',
-            error: error.message,
-            status: error.response?.status || 500
-        }));
-        
-        res.status(500).send('Search error: ' + (error.response?.data || error.message));
+            query: req.query.query,
+            status: error.response?.status || 500,
+            errorDetails: {
+                message: error.message,
+                responseStatus: error.response?.status,
+                axiosError: error.isAxiosError
+            }
+        });
+
+        // Send error response
+        res.status(errorInfo.status).send('Search error: ' + (error.response?.data || error.message));
     }
 }
 
