@@ -16,7 +16,8 @@
         
         { "source": "/api/queryCount", "destination": "/api/queryCount.js" },
         { "source": "/api/mongoTest", "destination": "/api/mongoTest.js" },
-        { "source": "/api/testAnalytics", "destination": "/api/testAnalytics.js" }        
+        { "source": "/api/testAnalytics", "destination": "/api/testAnalytics.js" },
+        { "source": "/api/migrate-ttl", "destination": "/api/migrate-ttl.js" }    
     ],
     "headers": [
         {
