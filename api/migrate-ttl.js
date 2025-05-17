@@ -5,7 +5,7 @@
  * It returns progress information so the migration can be continued with multiple calls.
  * 
  * @author Victor Chimenti
- * @version 1.0.1
+ * @version 1.0.2
  * @lastModified 2025-05-16
  */
 
@@ -19,7 +19,7 @@ const SEARCH_CLICK_TTL = 60 * 60 * 24 * 60; // 60 days in seconds
 const AUTH_KEY = process.env.MIGRATION_AUTH_KEY || 'secure-migration-key';
 
 // Very small batch size to avoid timeouts
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 500;
 
 // API handler
 module.exports = async (req, res) => {
