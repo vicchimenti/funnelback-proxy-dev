@@ -122,6 +122,28 @@ function logIpSources(request, clientIp, requestId) {
       userAgent: request.headers.get("user-agent"),
     })
   );
+
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    service: "edge-middleware",
+    requestId,
+    path: new URL(request.url).pathname,
+    ipSources: {
+      determinedClientIp: clientIp,
+      headers: {
+        xClientIp: request.headers.get('x-client-ip'),
+        cfConnectingIp: request.headers.get('cf-connecting-ip'),
+        xRealIp: request.headers.get('x-real-ip'),
+        xForwardedFor: request.headers.get('x-forwarded-for'),
+        xVercelProxiedFor: request.headers.get('x-vercel-proxied-for'),
+        xVercelForwardedFor: request.headers.get('x-vercel-forwarded-for'),
+        socketRemoteAddress: request.socket?.remoteAddress
+      },
+      userAgent: request.headers.get('user-agent')
+    }
+  }));
+
+
 }
 
 /**
@@ -169,10 +191,10 @@ function logSessionInfo(request, sessionId, wasGenerated, requestId) {
         source: wasGenerated
           ? "generated"
           : url.searchParams.has("sessionId")
-          ? "url_param"
-          : request.headers.get("x-session-id")
-          ? "header"
-          : "unknown",
+            ? "url_param"
+            : request.headers.get("x-session-id")
+              ? "header"
+              : "unknown",
         wasGenerated,
       },
       referer: request.headers.get("referer"),
