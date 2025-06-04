@@ -16,9 +16,9 @@
  *
  * @author Victor Chimenti
  * @namespace searchHandler
- * @version 5.1.0
+ * @version 5.1.1
  * @license MIT
- * @lastModified 2025-04-25
+ * @lastModified 2025-06-04
  */
 
 const axios = require("axios");
@@ -135,12 +135,9 @@ async function handler(req, res) {
     // This ensures Funnelback gets the actual client IP, not our server IP
     const funnelbackHeaders = {
       Accept: "text/html",
-      // Essential for Funnelback location detection - must be end user IP
       "X-Forwarded-For": clientIp,
-      // Additional headers for our own tracking across service boundaries
       "X-Original-Client-Ip": clientIp,
       "X-Real-Ip": clientIp,
-      // Forward location data if already determined
       "X-Geo-City": locationData.city || "",
       "X-Geo-Region": locationData.region || "",
       "X-Geo-Country": locationData.country || "",
