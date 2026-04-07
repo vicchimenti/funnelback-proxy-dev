@@ -22,6 +22,9 @@
  */
 
 const axios = require("axios");
+
+/** Timeout for Funnelback search requests (ms) */
+const FUNNELBACK_TIMEOUT_MS = 5000;
 const { getLocationData } = require("../lib/geoIpService");
 const { recordQuery } = require("../lib/queryAnalytics");
 const commonUtils = require("../lib/commonUtils");
@@ -161,6 +164,7 @@ async function handler(req, res) {
     const response = await axios.get(funnelbackUrl, {
       params: req.query,
       headers: funnelbackHeaders,
+      timeout: FUNNELBACK_TIMEOUT_MS,
     });
 
     // Log successful response
