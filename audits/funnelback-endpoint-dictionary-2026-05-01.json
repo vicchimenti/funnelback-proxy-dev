@@ -1,0 +1,340 @@
+{
+  "audit_date": "2026-05-01",
+  "scope": "Funnelback upstream endpoints sent by funnelback-proxy-dev",
+  "search_coverage": {
+    "directories_searched": ["api/", "lib/"],
+    "patterns_searched": [
+      "funnelback.squiz.cloud (literal)",
+      "axios.get / axios.post / fetch( / http(s).request",
+      "BACKEND_API_URL"
+    ],
+    "non_calling_modules_inspected": [
+      {
+        "file": "lib/queryMiddleware.js",
+        "note": "Analytics-tracking middleware that wraps handlers; makes no Funnelback requests."
+      },
+      {
+        "file": "middleware.js",
+        "lines": "226, 461",
+        "note": "fetch(request) / fetch(newRequest) forward inbound requests through Vercel's edge chain to matching /api/* handler. Not Funnelback calls."
+      }
+    ]
+  },
+  "endpoints": [
+    {
+      "id": "search",
+      "url": "https://dxp-us-search.funnelback.squiz.cloud/s/search.html",
+      "method": "GET",
+      "accept": "text/html",
+      "headers": {
+        "Accept": { "value": "text/html", "source": "static" },
+        "X-Forwarded-For": { "value": "clientIp from commonUtils.extractClientIp(req)", "source": "computed" },
+        "X-Original-Client-Ip": { "value": "clientIp", "source": "computed" },
+        "X-Real-Ip": { "value": "clientIp", "source": "computed" },
+        "X-Geo-City": { "value": "locationData.city || ''", "source": "computed" },
+        "X-Geo-Region": { "value": "locationData.region || ''", "source": "computed" },
+        "X-Geo-Country": { "value": "locationData.country || ''", "source": "computed" },
+        "X-Geo-Timezone": { "value": "locationData.timezone || ''", "source": "computed" },
+        "X-Request-ID": { "value": "commonUtils.getRequestId(req)", "source": "computed" }
+      },
+      "query_params": [
+        {
+          "name": "*",
+          "source": "params: req.query — entire req.query object passed through to axios at api/search.js:165",
+          "default": null,
+          "required": "unknown",
+          "note": "Specific param names not enumerable from proxy code; whatever the FE sends is forwarded."
+        }
+      ],
+      "timeout_ms": 5000,
+      "response_media_type": "text/html",
+      "response_transforms": "Body returned to client unmodified (api/search.js:258). extractResultCount (api/search.js:43-54) parses 'totalMatching\">N<' for analytics only.",
+      "callers": [
+        {
+          "file": "api/search.js",
+          "line_range": "100-168",
+          "context": "Main search handler; routed at /proxy/funnelback/search per vercel.json:5."
+        }
+      ],
+      "gaps": [
+        "Full set of query parameter names is whatever FE sends; not enumerable from proxy code."
+      ],
+      "notes": "Timeout constant FUNNELBACK_TIMEOUT_MS = 5000 declared at api/search.js:27."
+    },
+    {
+      "id": "server-deprecated",
+      "url": "https://dxp-us-search.funnelback.squiz.cloud/s/search.html",
+      "method": "GET",
+      "accept": "text/html",
+      "headers": {
+        "Accept": { "value": "text/html", "source": "static" },
+        "X-Forwarded-For": { "value": "userIp from inline header-priority chain (api/server.js:71-74)", "source": "computed" },
+        "X-Geo-City": { "value": "locationData.city (no fallback)", "source": "computed" },
+        "X-Geo-Region": { "value": "locationData.region (no fallback)", "source": "computed" },
+        "X-Geo-Country": { "value": "locationData.country (no fallback)", "source": "computed" },
+        "X-Geo-Timezone": { "value": "locationData.timezone (no fallback)", "source": "computed" }
+      },
+      "query_params": [
+        { "name": "collection", "source": "hardcoded", "default": "seattleu~sp-search", "required": false, "note": "Overridable by req.query — req.query is spread last (api/server.js:85-90)." },
+        { "name": "profile", "source": "hardcoded", "default": "_default", "required": false, "note": "Overridable by req.query." },
+        { "name": "form", "source": "hardcoded", "default": "partial", "required": false, "note": "Overridable by req.query." },
+        { "name": "*", "source": "...req.query spread after defaults", "default": null, "required": "unknown", "note": "Client-supplied params override hardcoded defaults of same name." }
+      ],
+      "timeout_ms": 5000,
+      "response_media_type": "text/html",
+      "response_transforms": "Body returned to client unmodified (api/server.js:183). extractResultCount parsed for analytics only.",
+      "callers": [
+        {
+          "file": "api/server.js",
+          "line_range": "82-109",
+          "context": "Original /proxy/funnelback main handler. CLAUDE.md flags this on the deprecation watchlist as 'does nothing meaningful today.' vercel.json:4 still routes /proxy/funnelback to it."
+        }
+      ],
+      "gaps": [
+        "Whether the route is still called by any active caller is not determinable from proxy code.",
+        "Whether sending bare 'undefined' (no || '' fallback) for X-Geo-* differs from the newer handlers' '' values in Funnelback-side handling."
+      ],
+      "notes": "Sends fewer headers than search-handler — no X-Original-Client-Ip, X-Real-Ip, or X-Request-ID. IP extraction inlined rather than delegated to commonUtils."
+    },
+    {
+      "id": "spelling",
+      "url": "https://dxp-us-search.funnelback.squiz.cloud/s/search.html",
+      "method": "GET",
+      "accept": "text/html",
+      "headers": {
+        "Accept": { "value": "text/html", "source": "static" },
+        "X-Forwarded-For": { "value": "userIp from inline header-priority chain (api/spelling.js:75-78)", "source": "computed" },
+        "X-Geo-City": { "value": "locationData.city (no fallback)", "source": "computed" },
+        "X-Geo-Region": { "value": "locationData.region (no fallback)", "source": "computed" },
+        "X-Geo-Country": { "value": "locationData.country (no fallback)", "source": "computed" },
+        "X-Geo-Timezone": { "value": "locationData.timezone (no fallback)", "source": "computed" }
+      },
+      "query_params": [
+        { "name": "*", "source": "...req.query spread first (api/spelling.js:103)", "default": null, "required": "unknown", "note": "Client params spread first; hardcoded defaults below override matching keys." },
+        { "name": "collection", "source": "hardcoded", "default": "seattleu~sp-search", "required": true, "note": "Always sent; overrides any client value (api/spelling.js:104)." },
+        { "name": "profile", "source": "hardcoded", "default": "_default", "required": true, "note": "Always sent; overrides any client value (api/spelling.js:105)." },
+        { "name": "form", "source": "hardcoded", "default": "partial", "required": true, "note": "Always sent; overrides any client value (api/spelling.js:106)." }
+      ],
+      "timeout_ms": 5000,
+      "response_media_type": "text/html",
+      "response_transforms": "Body returned to client unmodified (api/spelling.js:212). extractSpellingSuggestions (api/spelling.js:41-59) parses 'class=\"spelling\">Did you mean:N<' for analytics only.",
+      "callers": [
+        {
+          "file": "api/spelling.js",
+          "line_range": "100-130",
+          "context": "Spelling-suggestions handler; routed at /proxy/funnelback/spelling per vercel.json:7."
+        }
+      ],
+      "gaps": [
+        "Whether the spread-order difference vs server.js (defaults override client here, client overrides defaults there) is intentional cannot be determined from proxy code."
+      ],
+      "notes": "Constructs URLSearchParams object (api/spelling.js:102-107) and passes it as axios `params`. Sends fewer headers than search-handler — no X-Original-Client-Ip, X-Real-Ip, or X-Request-ID."
+    },
+    {
+      "id": "suggest",
+      "url": "https://dxp-us-search.funnelback.squiz.cloud/s/suggest.json",
+      "method": "GET",
+      "accept": "text/html",
+      "headers": {
+        "Accept": { "value": "text/html", "source": "static" },
+        "X-Forwarded-For": { "value": "clientIp from commonUtils.extractClientIp(req)", "source": "computed" },
+        "X-Original-Client-Ip": { "value": "clientIp", "source": "computed" },
+        "X-Real-Ip": { "value": "clientIp", "source": "computed" },
+        "X-Geo-City": { "value": "locationData.city || ''", "source": "computed" },
+        "X-Geo-Region": { "value": "locationData.region || ''", "source": "computed" },
+        "X-Geo-Country": { "value": "locationData.country || ''", "source": "computed" },
+        "X-Geo-Timezone": { "value": "locationData.timezone || ''", "source": "computed" },
+        "X-Request-ID": { "value": "requestId", "source": "computed" }
+      },
+      "query_params": [
+        {
+          "name": "*",
+          "source": "params: req.query — entire req.query object passed through to axios at api/suggest.js:421",
+          "default": null,
+          "required": "unknown"
+        }
+      ],
+      "timeout_ms": 3000,
+      "response_media_type": "application/json",
+      "response_transforms": "Coerced to array (api/suggest.js:434), then enrichSuggestions(responseData, req.query, requestId) at api/suggest.js:437 adds metadata to each suggestion. Cached as 'suggestions' keyspace at api/suggest.js:442-447.",
+      "callers": [
+        {
+          "file": "api/suggest.js",
+          "line_range": "385-424",
+          "context": "General autocomplete handler; routed at /proxy/funnelback/suggest per vercel.json:8."
+        }
+      ],
+      "gaps": [
+        "Accept: text/html on .json endpoint — Funnelback requirement or vestige? Not determinable from proxy code."
+      ],
+      "notes": "Timeout constant FUNNELBACK_TIMEOUT_MS = 3000 (api/suggest.js:31), shorter than search/server/spelling/tools (5000)."
+    },
+    {
+      "id": "suggest-people",
+      "url": "https://dxp-us-search.funnelback.squiz.cloud/s/search.json",
+      "method": "GET",
+      "accept": "text/html",
+      "headers": {
+        "Accept": { "value": "text/html", "source": "static" },
+        "X-Forwarded-For": { "value": "clientIp from commonUtils.extractClientIp(req)", "source": "computed" },
+        "X-Original-Client-Ip": { "value": "clientIp", "source": "computed" },
+        "X-Real-Ip": { "value": "clientIp", "source": "computed" },
+        "X-Geo-City": { "value": "locationData.city || ''", "source": "computed" },
+        "X-Geo-Region": { "value": "locationData.region || ''", "source": "computed" },
+        "X-Geo-Country": { "value": "locationData.country || ''", "source": "computed" },
+        "X-Geo-Timezone": { "value": "locationData.timezone || ''", "source": "computed" },
+        "X-Request-ID": { "value": "requestId", "source": "computed" }
+      },
+      "query_params": [
+        { "name": "form", "source": "hardcoded", "default": "partial", "required": true },
+        { "name": "profile", "source": "hardcoded", "default": "_default", "required": true },
+        { "name": "query", "source": "encodeURIComponent(req.query.query || '')", "default": "''", "required": true, "note": "Only client field forwarded; all other req.query keys discarded (api/suggestPeople.js:331-340)." },
+        { "name": "f.Tabs|seattleu~ds-staff", "source": "hardcoded", "default": "Faculty & Staff", "required": true, "note": "Sent as 'f.Tabs%7Cseattleu%7Eds-staff=Faculty+%26+Staff' on the wire." },
+        { "name": "collection", "source": "hardcoded", "default": "seattleu~sp-search", "required": true, "note": "Note: people handler queries the sp-search (general) collection, not a people-specific one." },
+        { "name": "num_ranks", "source": "hardcoded", "default": "5", "required": true }
+      ],
+      "timeout_ms": 3000,
+      "response_media_type": "application/json",
+      "response_transforms": "Maps response.data.response.resultPacket.results to a flat array of person objects (api/suggestPeople.js:386 onward) with cleanTitle applied to several listMetadata fields. Sent to client as JSON.",
+      "callers": [
+        {
+          "file": "api/suggestPeople.js",
+          "line_range": "317-376",
+          "context": "People-tab autocomplete handler; routed at /proxy/suggestPeople per vercel.json:9."
+        }
+      ],
+      "gaps": [
+        "Accept: text/html on .json endpoint — same gap as suggest.",
+        "Whether discarding non-`query` fields from req.query (vs the pass-through handlers) is intentional."
+      ],
+      "notes": "URL is constructed at api/suggestPeople.js:340 by appending a hand-built query string to the base URL; axios is called with no `params` option (api/suggestPeople.js:373-376). Dead code: a URLSearchParams object is built at api/suggestPeople.js:322-328 and never used. Its values diverge from the wire form: line 326 says 'f.Tabs|seattleu|Eds-staff' (pipe + capital E + literal pipe); the queryString actually sent decodes to 'f.Tabs|seattleu~ds-staff' (pipe + tilde + lowercase d). The queryString form is authoritative."
+    },
+    {
+      "id": "suggest-programs",
+      "url": "https://dxp-us-search.funnelback.squiz.cloud/s/search.json",
+      "method": "GET",
+      "accept": "application/json",
+      "headers": {
+        "Accept": { "value": "application/json", "source": "static" },
+        "Content-Type": { "value": "application/json", "source": "static", "note": "Set on a GET request with no body — only handler that does this." },
+        "X-Forwarded-For": { "value": "clientIp from commonUtils.extractClientIp(req)", "source": "computed" },
+        "X-Original-Client-Ip": { "value": "clientIp", "source": "computed" },
+        "X-Real-Ip": { "value": "clientIp", "source": "computed" },
+        "X-Geo-City": { "value": "locationData.city || ''", "source": "computed" },
+        "X-Geo-Region": { "value": "locationData.region || ''", "source": "computed" },
+        "X-Geo-Country": { "value": "locationData.country || ''", "source": "computed" },
+        "X-Geo-Timezone": { "value": "locationData.timezone || ''", "source": "computed" },
+        "X-Request-ID": { "value": "requestId", "source": "computed" }
+      },
+      "query_params": [
+        { "name": "*", "source": "...req.query spread first (api/suggestPrograms.js:240)", "default": null, "required": "unknown", "note": "Client params spread first; hardcoded defaults below override matching keys." },
+        { "name": "collection", "source": "hardcoded", "default": "seattleu~ds-programs", "required": true, "note": "Always sent; overrides any client value." },
+        { "name": "profile", "source": "hardcoded", "default": "_default", "required": true, "note": "Always sent; overrides any client value." },
+        { "name": "num_ranks", "source": "hardcoded", "default": "5", "required": true, "note": "Numeric (5), not string ('5')." },
+        { "name": "form", "source": "hardcoded", "default": "partial", "required": true, "note": "Always sent; overrides any client value." }
+      ],
+      "timeout_ms": 3000,
+      "response_media_type": "application/json",
+      "response_transforms": "Wraps response.data.response.resultPacket into { metadata: { totalResults, queryTime, searchTerm }, programs: [...] } (api/suggestPrograms.js:407-433). cleanProgramTitle applied to titles. Sent to client as JSON.",
+      "callers": [
+        {
+          "file": "api/suggestPrograms.js",
+          "line_range": "359-397",
+          "context": "Programs-tab autocomplete handler; routed at /proxy/suggestPrograms per vercel.json:10."
+        }
+      ],
+      "gaps": [
+        "Whether Content-Type: application/json on a GET (no body) has any effect on Funnelback's handling.",
+        "Whether num_ranks: 5 (number) vs '5' (string in suggest-people) produces different behavior."
+      ],
+      "notes": "Only handler that sends Accept: application/json. Hardcoded collection differs from the other handlers (seattleu~ds-programs vs seattleu~sp-search)."
+    },
+    {
+      "id": "tools-dynamic",
+      "url": "https://dxp-us-search.funnelback.squiz.cloud/s/${req.query.path}",
+      "method": "GET",
+      "accept": "text/html",
+      "headers": {
+        "Accept": { "value": "text/html", "source": "static" },
+        "X-Forwarded-For": { "value": "userIp from inline header-priority chain (api/tools.js:49-52)", "source": "computed" },
+        "X-Geo-City": { "value": "locationData.city (no fallback)", "source": "computed" },
+        "X-Geo-Region": { "value": "locationData.region (no fallback)", "source": "computed" },
+        "X-Geo-Country": { "value": "locationData.country (no fallback)", "source": "computed" },
+        "X-Geo-Timezone": { "value": "locationData.timezone (no fallback)", "source": "computed" }
+      },
+      "query_params": [
+        { "name": "path", "source": "req.query.path", "default": "''", "required": false, "note": "Used to construct URL path slot (api/tools.js:81); empty string fallback yields a request to .../s/. Also still present in `params: req.query` passed to axios — sent twice, once in URL path and once as a query parameter." },
+        { "name": "*", "source": "params: req.query — entire req.query passed through (api/tools.js:102)", "default": null, "required": "unknown" }
+      ],
+      "timeout_ms": 5000,
+      "response_media_type": "text/html",
+      "response_transforms": "Body returned to client unmodified (api/tools.js:185).",
+      "callers": [
+        {
+          "file": "api/tools.js",
+          "line_range": "80-105",
+          "context": "Funnelback 'tools' surface; routed at /proxy/funnelback/tools per vercel.json:6. Per CLAUDE.md, provides functionality that is part of the working search system end users see."
+        }
+      ],
+      "gaps": [
+        "req.query.path values are not enumerable from proxy code — FE-side audit out of scope.",
+        "Whether sending `path` both in URL path and as query parameter is intended."
+      ],
+      "notes": "Sends fewer headers than search-handler — no X-Original-Client-Ip, X-Real-Ip, or X-Request-ID. IP extraction inlined rather than delegated to commonUtils."
+    }
+  ],
+  "out_of_inventory": [
+    {
+      "id": "suggest-js-new-dead",
+      "file": "api/suggest.js.new",
+      "line_range": "205-219",
+      "url": "https://dxp-us-search.funnelback.squiz.cloud/s/suggest.json",
+      "reason_excluded": "Not wired in vercel.json; CLAUDE.md flags as 'dead file, never wired in.' Documented for grep-completeness only.",
+      "shape_summary": "GET; Accept: application/json; only X-Forwarded-For header beyond Accept; no timeout option set on axios call."
+    },
+    {
+      "id": "geoip-external",
+      "file": "lib/geoIpService.js",
+      "line": 179,
+      "url": "http://ip-api.com/json/${ip}",
+      "reason_excluded": "Not a Funnelback endpoint; out of scope. Mentioned because grep for 'axios.' matched."
+    },
+    {
+      "id": "edge-middleware-fetch",
+      "file": "middleware.js",
+      "lines": "226, 461",
+      "reason_excluded": "fetch() forwards inbound request through Vercel's edge chain to matching /api/* handler. Not a Funnelback call."
+    }
+  ],
+  "cross_cutting_observations": {
+    "distinct_urls": 4,
+    "distinct_request_shapes": 7,
+    "timeout_values_ms": {
+      "5000": ["search", "server-deprecated", "spelling", "tools-dynamic"],
+      "3000": ["suggest", "suggest-people", "suggest-programs"]
+    },
+    "accept_header": {
+      "text/html": ["search", "server-deprecated", "spelling", "suggest", "suggest-people", "tools-dynamic"],
+      "application/json": ["suggest-programs"]
+    },
+    "ip_extraction": {
+      "commonUtils.extractClientIp": ["search", "suggest", "suggest-people", "suggest-programs"],
+      "inline_header_chain": ["server-deprecated", "spelling", "tools-dynamic"]
+    },
+    "header_set_variant": {
+      "extended_with_X-Original-Client-Ip_X-Real-Ip_X-Request-ID_and_X-Geo-fallbacks": ["search", "suggest", "suggest-people", "suggest-programs"],
+      "minimal_X-Forwarded-For_plus_bare_X-Geo": ["server-deprecated", "spelling", "tools-dynamic"]
+    },
+    "req_query_forwarding": {
+      "pass_through_entire_req_query": ["search", "suggest", "tools-dynamic"],
+      "spread_with_hardcoded_defaults_client_wins": ["server-deprecated"],
+      "spread_with_hardcoded_defaults_defaults_win": ["spelling", "suggest-programs"],
+      "hand_built_query_string_only_query_field_forwarded": ["suggest-people"]
+    }
+  },
+  "global_gaps": [
+    "Funnelback-side authoritative requirements for which fields are required vs optional are not derivable from proxy code.",
+    "Whether host 'dxp-us-search.funnelback.squiz.cloud' is environment-specific (dev vs prod) is not derivable — no env-var indirection observed; URL is a literal in every handler.",
+    "FE-side caller behavior — including the set of req.query fields actually sent and the values of req.query.path for tools — is out of scope per the audit brief."
+  ]
+}
