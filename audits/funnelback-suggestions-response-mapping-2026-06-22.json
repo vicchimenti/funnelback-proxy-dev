@@ -1,0 +1,157 @@
+{
+  "audit_date": "2026-06-22",
+  "scope": "Funnelback resultPacket -> dropdown-bucket response field mapping performed by the three funnelback-proxy-dev suggestion handlers; feeds the ADR-007 suggestions-dispatch build brief.",
+  "posture": "Reference, not specification. Binding constraints are end-user dropdown functionality and live /s/search.json shapes. Proxy code is authoritative only on how the legacy did it. Every field carries a binding_status.",
+  "status": "Both /s/search.json legs (people, programs) confirmed against live samples captured 2026-06-22. General leg (/s/suggest.json) remains code-reference (its upstream is a plain string array, well understood).",
+  "binding_status_values": {
+    "confirmed_ftl": "Matches the held results.people.ftl stencil vocabulary.",
+    "confirmed_live": "Verified against a live /s/search.json sample captured this session.",
+    "confirmed_ftl+live": "Matches the held FTL stencil AND verified against the live sample.",
+    "reference_only": "From proxy code; not otherwise confirmed.",
+    "needs_live_confirmation": "Depends on a live /s/search.json shape not yet captured for that collection."
+  },
+  "source_files": [
+    { "file": "api/suggestPeople.js", "response_map_lines": "386-412", "clean_helper": "cleanTitle (55-60)" },
+    { "file": "api/suggestPrograms.js", "response_map_lines": "407-433", "clean_helper": "cleanProgramTitle (58-68)" },
+    { "file": "api/suggest.js", "response_map_lines": "434-437", "enrich_helper": "enrichSuggestions (59-111)" }
+  ],
+  "normalization_helpers": {
+    "cleanTitle": {
+      "defined_at": "api/suggestPeople.js:55-60",
+      "behavior": "strip HTML tags (/<\\/?[^>]+(>|$)/g) -> take first pipe segment (.split('|')[0]) -> .trim()",
+      "order": "strip-then-split",
+      "applied_to": ["people.title", "people.position", "people.department", "people.affiliation", "people.college"],
+      "shared": false
+    },
+    "cleanProgramTitle": {
+      "defined_at": "api/suggestPrograms.js:58-68",
+      "behavior": "falsy -> ''; else take first pipe segment (.split('|')[0]) -> strip HTML tags (/<[^>]+>/g) -> .trim()",
+      "order": "split-then-strip",
+      "applied_to": ["programs.title"],
+      "shared": false
+    },
+    "divergence_note": "The two helpers are independent local definitions, not a shared module. Operation order and regexes differ; outputs differ only when an HTML tag contains a '|'. Captured, not reconciled."
+  },
+  "legs": [
+    {
+      "leg": "general",
+      "upstream": "/s/suggest.json",
+      "upstream_response": "raw JSON array of strings (coerced to [] if not an array, suggest.js:434)",
+      "emitted_shape": "{ display: <string>, metadata: { tabs: string[] } }  (NOT a bare string)",
+      "fields": [
+        { "output_field": "display", "source": "Funnelback suggestion string (array element)", "normalization": "none", "binding_status": "reference_only", "evidence": "api/suggest.js:99" },
+        { "output_field": "metadata.tabs", "source": "NOT from Funnelback - derived from request query params: query['f.Tabs|programMain'] -> 'program-main'; query['f.Tabs|seattleu~ds-staff'] -> 'Faculty & Staff'", "normalization": "none", "binding_status": "reference_only", "evidence": "api/suggest.js:74-95" }
+      ],
+      "shape_decision": "Legacy emits { display, metadata:{ tabs } }. tabs is a proxy-internal artifact with no Funnelback source. Recommend the rebuild dispatcher emit { display } and drop tabs unless the dropdown consumes it (confirm vs fe-autocomplete-audit-2026-05-05)."
+    },
+    {
+      "leg": "people",
+      "upstream": "/s/search.json",
+      "collection": "seattleu~sp-search",
+      "filter": "f.Tabs|seattleu~ds-staff=Faculty & Staff",
+      "source_root": "response.data.response.resultPacket.results[]",
+      "source_root_status": "confirmed_live (envelope response.resultPacket.results[] verified in 2026-06-22 staff sample)",
+      "emitted_shape": "flat array of person objects",
+      "fields": [
+        { "output_field": "title", "source": "result.title (top-level result field)", "normalization": "cleanTitle", "binding_status": "confirmed_live", "evidence": "api/suggestPeople.js:404", "divergence": "Stencil derives title from 't' / peopleFirstName+peopleLastName metadata; handler uses result.title. Divergence is BENIGN for people: live result.title is the full breadcrumb ('Christopher Smith, EdD | Profiles | ...'); cleanTitle splits on first '|' -> 'Christopher Smith, EdD', matching listMetadata.t[4/5]. No peopleFirstName/peopleLastName keys exist in the live data." },
+        { "output_field": "position", "source": "result.listMetadata.peoplePosition[0]", "normalization": "cleanTitle", "binding_status": "confirmed_ftl+live", "evidence": "api/suggestPeople.js:393-395,406" },
+        { "output_field": "department", "source": "result.listMetadata.peopleDepartment[0]", "normalization": "cleanTitle", "binding_status": "confirmed_ftl+live", "evidence": "api/suggestPeople.js:396-398,407", "note": "Not present on every result (e.g. faculty ranks 3,7-10 omit it); null-guarded." },
+        { "output_field": "affiliation", "source": "result.listMetadata.affiliation[0]", "normalization": "cleanTitle", "binding_status": "confirmed_ftl+live", "evidence": "api/suggestPeople.js:390-392,405", "note": "Can be multi-valued (rank 10: ['Faculty ',' Adjunct']); handler takes [0] only." },
+        { "output_field": "college", "source": "result.listMetadata.college[0]", "normalization": "cleanTitle", "binding_status": "confirmed_ftl+live", "evidence": "api/suggestPeople.js:399-401,408", "note": "Present only on a subset (ranks 3,4,7,8,9,10); null-guarded." },
+        { "output_field": "url", "source": "result.liveUrl (|| '')", "normalization": "none", "binding_status": "confirmed_ftl+live", "evidence": "api/suggestPeople.js:409" },
+        { "output_field": "image", "source": "result.listMetadata.image[0] (|| null)", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPeople.js:410", "note": "CONFIRMED present in 2026-06-22 staff sample (all 10 ranks). image is an array whose [1] is a truncated duplicate of [0]; the handler's [0] is the canonical URL. Mix of real photos and ProfileDefaultPics-* placeholders." }
+      ],
+      "available_but_unmapped": ["peopleEmail", "peoplePhone", "pronouns", "author", "type", "t"],
+      "available_but_unmapped_note": "These listMetadata keys are present live but not mapped by the handler. peopleEmail/peoplePhone may matter to the rebuild dropdown - an FE-binding question, flagged not decided.",
+      "null_guard": "Each metadata field uses listMetadata.<key>?.[0] ? clean(...) : null."
+    },
+    {
+      "leg": "programs",
+      "upstream": "/s/search.json",
+      "collection": "seattleu~ds-programs",
+      "source_root": "response.data.response.resultPacket",
+      "source_root_status": "confirmed_live (2026-06-22 programs sample, query=nursing)",
+      "emitted_shape": "{ metadata: {...}, programs: [...] }  (object wrapper; never a bare array)",
+      "fields": [
+        { "output_field": "metadata.totalResults", "source": "resultPacket.resultsSummary.totalMatching (|| 0)", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:410", "note": "resultsSummary.totalMatching=24 in programs sample." },
+        { "output_field": "metadata.queryTime", "source": "resultPacket.resultsSummary.queryTime (|| 0)", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:412", "note": "DEAD FIELD: resultsSummary has NO queryTime key in either live sample. Timing lives at resultPacket.padreElapsedTime / phlusterElapsedTime instead. This field always resolves to its || 0 fallback. Rebuild should drop it or read padreElapsedTime." },
+        { "output_field": "metadata.searchTerm", "source": "query.query (|| '') - echo of input", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:414" },
+        { "output_field": "programs[].id", "source": "result.rank", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:418" },
+        { "output_field": "programs[].title", "source": "result.title", "normalization": "cleanProgramTitle", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:419", "divergence": "result.title can be LESS complete than listMetadata.t for programs. Rank 10 title='Kinesiology | Seattle University' -> cleanProgramTitle -> 'Kinesiology', dropping the ', MS' that t[4]='Kinesiology, MS' carries. If the dropdown needs the credential in the title, prefer listMetadata.t[4] over result.title for programs." },
+        { "output_field": "programs[].url", "source": "result.liveUrl", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:420" },
+        { "output_field": "programs[].details.type", "source": "result.listMetadata.programCredentialType[0] (|| null)", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:422", "note": "e.g. 'Doctor of Nursing Practice', 'Bachelor of Science', 'Master of Business Administration'. Full credential name." },
+        { "output_field": "programs[].details.school", "source": "result.listMetadata.provider[0] (|| null)", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:423", "note": "e.g. 'College of Nursing & Health Sciences', 'Albers School of Business & Economics'." },
+        { "output_field": "programs[].details.credits", "source": "result.listMetadata.credits[0] (|| null)", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:424", "note": "Free-text, not numeric (e.g. 'Prelicensure: 67 Credits; Total: 163-177', '120 semester/180 quarter credits')." },
+        { "output_field": "programs[].details.area", "source": "result.listMetadata.areaOfStudy[0] (|| null)", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:425", "note": "Can be multi-valued (rank 8: 4 areas); handler takes [0] only." },
+        { "output_field": "programs[].details.level", "source": "result.listMetadata.category[0] (|| null)", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:426", "note": "SEMANTIC MISLABEL: 'category' holds career-outcome roles ('Acute Care Nurse Practitioner', 'Vascular Sonographer'), NOT an academic level. The actual academic level lives in the UNMAPPED 'type' key ('Doctorate'/'Major'/\"Master's\"/'Professional'). If the dropdown wants level, map 'type'; if it wants careers, rename this field. Also multi-valued; handler takes [0]." },
+        { "output_field": "programs[].details.mode", "source": "result.listMetadata.programMode[0] (|| null)", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:427", "note": "e.g. 'In-Person', 'Hybrid'." },
+        { "output_field": "programs[].image", "source": "result.listMetadata.image[0] (|| null)", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:429", "note": "NON-DISCRIMINATING: every program in the sample carries the SAME generic placeholder (Seattle-University-Fountain-mw.jpg). [1] is a duplicate of [0]. Rebuild may omit image for programs since it conveys nothing." },
+        { "output_field": "programs[].description", "source": "result.listMetadata.c[0] (|| null)", "normalization": "none", "binding_status": "confirmed_live", "evidence": "api/suggestPrograms.js:430", "note": "'c' is the page meta-description/summary. Array [0] is the full sentence, [1] a truncated fragment; handler's [0] is correct. May contain unicode (smart apostrophes)." }
+      ],
+      "available_but_unmapped": ["type", "keyword", "t", "programMain", "author", "FunReadingGrade", "FunResponseTime", "many Fun* accessibility-audit fields"],
+      "available_but_unmapped_note": "'type' (academic level: Doctorate/Major/Master's/Professional) is the most useful unmapped key - see details.level mislabel. The programs collection also carries a large block of Fun* accessibility-auditor metadata, irrelevant to the dropdown.",
+      "collection_profile_note": "The programs collection profile has NO facets (type 'web', empty facetDefinitions), unlike sp-search which is a 'meta' collection with a full facet set."
+    }
+  ],
+  "recommendations": {
+    "programs_shape_pin": {
+      "recommendation": "Pin a bare array of program objects for the rebuild dispatcher.",
+      "reason": "Proxy always emits { metadata, programs } (suggestPrograms.js:486 live, :331 cache); it never emits a bare array, so the FE Array.isArray branch (search-page-autocomplete.js:360-363) is defensive residue with no proxy source. The dropdown consumes title/url/description/details.school; metadata.totalResults is the only live metadata field with content (queryTime is dead). The array is simpler and the FE already tolerates both.",
+      "caveat": "Confirm metadata is not consumed by the dropdown vs fe-autocomplete-audit-2026-05-05 sections 3/6 before finalizing. If totalResults is needed, carry it as a sibling, not a wrapper."
+    },
+    "general_shape_pin": "Emit { display }; drop metadata.tabs unless the dropdown consumes it (tabs has no Funnelback source).",
+    "image_field": "People: KEEP - confirmed populated and discriminating (real photos / branded placeholders), use [0]. Programs: CONSIDER OMITTING - confirmed present but every program shares the same generic fountain placeholder, so it conveys nothing.",
+    "programs_level_field": "details.level maps from 'category' (career roles), which is mislabeled. Decide per dropdown need: map listMetadata.type for academic level, OR rename the field to reflect that it carries careers. Currently it is neither cleanly.",
+    "programs_querytime_field": "metadata.queryTime is dead (source key absent in live data). Drop it or repoint to resultPacket.padreElapsedTime.",
+    "programs_title_source": "If the dropdown needs the credential suffix (', MS', ', DNP') reliably, prefer listMetadata.t[4] over result.title for programs - result.title occasionally omits it (rank 10).",
+    "people_extra_fields": "Consider whether the rebuild dropdown wants peopleEmail / peoplePhone - present live but dropped by the legacy handler. Decide against fe-autocomplete-audit-2026-05-05."
+  },
+  "live_samples": [
+    {
+      "leg": "people",
+      "captured": "2026-06-22",
+      "request": "/s/search.json?collection=seattleu~sp-search&f.Tabs|seattleu~ds-staff=Faculty & Staff&form=partial&num_ranks=10&profile=_default&query=smith",
+      "funnelback_version": "16.46.0.0",
+      "totalMatching": 27,
+      "results_returned": 10,
+      "all_results_collection": "seattleu~ds-staff",
+      "confirms": ["people.title", "people.position", "people.department", "people.affiliation", "people.college", "people.url", "people.image", "people.source_root"],
+      "observations": [
+        "image present on all 10 ranks; [1] is a truncated duplicate of [0].",
+        "No peopleFirstName/peopleLastName keys; name lives in result.title and listMetadata.t.",
+        "Unmapped-but-present: peopleEmail, peoplePhone, pronouns, author, type, t.",
+        "college and peopleDepartment are sparse (subset of results); affiliation can be multi-valued.",
+        "resultsSummary has no queryTime key (padreElapsedTime is at resultPacket level)."
+      ]
+    },
+    {
+      "leg": "programs",
+      "captured": "2026-06-22",
+      "request": "/s/search.json?collection=seattleu~ds-programs&form=partial&num_ranks=10&profile=_default&query=nursing",
+      "funnelback_version": "16.46.0.0",
+      "totalMatching": 24,
+      "results_returned": 10,
+      "all_results_collection": "seattleu~ds-programs",
+      "confirms": ["programs.metadata.totalResults", "programs.metadata.searchTerm", "programs.id", "programs.title", "programs.url", "programs.details.type", "programs.details.school", "programs.details.credits", "programs.details.area", "programs.details.level", "programs.details.mode", "programs.image", "programs.description"],
+      "observations": [
+        "programCredentialType, provider, credits, areaOfStudy, category, programMode, image, c all present and mapped.",
+        "details.level <- category is a career-role list, not an academic level; 'type' (Doctorate/Major/Master's/Professional) is the real level and is unmapped.",
+        "image is the same generic Seattle-University-Fountain-mw.jpg for every program; non-discriminating.",
+        "c[0] is the full meta-description, c[1] a truncated fragment; handler uses [0].",
+        "result.title sometimes omits the credential (rank 10 'Kinesiology | Seattle University') that listMetadata.t carries ('Kinesiology, MS').",
+        "resultsSummary has NO queryTime key -> metadata.queryTime always 0.",
+        "Programs collection profile has no facets (type 'web'); large Fun* accessibility-audit metadata block present but irrelevant."
+      ]
+    }
+  ],
+  "live_confirmation_needed": {
+    "note": "NONE outstanding. Both /s/search.json legs confirmed against 2026-06-22 live samples. The general /s/suggest.json leg returns a plain string array (well understood) and was not separately sampled."
+  },
+  "triangulation_sources": [
+    "fe-autocomplete-audit-2026-05-05 sections 3/6 - output bucket field names",
+    "results.people.ftl stencil - people metadata vocabulary (peoplePosition, peopleDepartment, affiliation, college, expertiseArea, t, peopleFirstName/peopleLastName, liveUrl)",
+    "funnelback-endpoint-dictionary-2026-05-01 - suggest / suggest-people / suggest-programs transform summaries",
+    "live /s/search.json staff sample (query=smith, 2026-06-22) - people-leg field confirmation",
+    "live /s/search.json programs sample (query=nursing, 2026-06-22) - programs-leg field confirmation"
+  ]
+}
